@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Gestionale Contabile — Gruppo Virtus 2026/2027</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+/* ── RESET & VARIABILI ── */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#F8F9FA;--bg2:#FFFFFF;--bg3:#F0F2F5;
+  --text1:#1A1A2E;--text2:#555;--text3:#999;
+  --border:#E0E0E0;--border2:#CCC;
+  --radius:8px;
+  --blu:#0D3B6E;--verde:#1A5C38;--marrone:#6B3A00;
+  --rosso:#C0392B;--amber:#E67E22;
+  --dare:#E53935;--avere:#1A5C38;
+}
+
+/* ── LAYOUT ── */
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text1);font-size:13px}
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:240px;flex-shrink:0;background:var(--blu);
+  display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+}
+.sidebar-logo{padding:1rem 1.2rem;border-bottom:0.5px solid rgba(255,255,255,.15)}
+.sidebar-logo h2{color:#fff;font-size:14px;font-weight:800}
+.sidebar-logo .sub{color:rgba(255,255,255,.6);font-size:10px;margin-top:2px}
+.nav-section{padding:.6rem 1.2rem .3rem;font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45)}
+.nav-item{
+  display:flex;align-items:center;gap:.6rem;
+  padding:.55rem 1.2rem;font-size:12px;font-weight:500;
+  color:rgba(255,255,255,.8);cursor:pointer;
+  background:none;border:none;width:100%;text-align:left;
+  transition:background .15s;font-family:inherit;
+}
+.nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav-item.active{background:rgba(255,255,255,.18);color:#fff;font-weight:700}
+.nav-item .icon{font-size:14px;width:18px;text-align:center}
+.sidebar-bottom{margin-top:auto;padding:.8rem 1rem;border-top:0.5px solid rgba(255,255,255,.15)}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;background:var(--bg)}
+.page{display:none;padding:1.4rem}
+.page.active{display:block}
+.page-header{margin-bottom:1rem}
+.page-title{font-size:18px;font-weight:800;color:var(--text1)}
+.page-sub{font-size:11px;color:var(--text2);margin-top:3px}
+
+/* ── METRICHE ── */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.8rem;margin-bottom:1rem}
+.metric{background:var(--bg2);border-radius:var(--radius);padding:.8rem 1rem;border:.5px solid var(--border)}
+.metric-label{font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem}
+.metric-value{font-size:20px;font-weight:800;color:var(--text1)}
+.metric-value.dare{color:var(--dare)}
+.metric-value.avere{color:var(--avere)}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem}
+.btn{background:var(--bg2);border:.5px solid var(--border2);border-radius:var(--radius);
+  padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text1);font-weight:500}
+.btn:hover{background:var(--bg3)}
+.btn-dark{background:var(--blu);color:#fff;border-color:var(--blu)}
+.btn-dark:hover{opacity:.9}
+.btn-del{background:#FEE;border:.5px solid var(--rosso);color:var(--rosso);
+  border-radius:var(--radius);padding:3px 8px;font-size:11px;cursor:pointer;font-family:inherit}
+
+/* ── TABELLE ── */
+.tbl-wrap{background:var(--bg2);border-radius:var(--radius);border:.5px solid var(--border);overflow:hidden}
+.scrollx{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--blu);color:#fff;padding:8px 10px;text-align:left;font-weight:700;font-size:11px;white-space:nowrap}
+td{padding:7px 10px;border-bottom:.5px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg)}
+.dare-cell{color:var(--dare);font-weight:700;text-align:right}
+.avere-cell{color:var(--avere);font-weight:700;text-align:right}
+.num{text-align:right}
+
+/* ── FORM / MODAL ── */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:1000;align-items:center;justify-content:center;
+}
+.modal{background:var(--bg2);border-radius:12px;padding:1.5rem;
+  width:600px;max-width:96vw;max-height:92vh;overflow-y:auto;
+  box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-title{font-size:15px;font-weight:800;color:var(--text1);margin-bottom:1.1rem}
+.form-row{margin-bottom:.7rem}
+.form-label{display:block;font-size:11px;font-weight:700;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem}
+.form-input{width:100%;border:.5px solid var(--border2);border-radius:var(--radius);
+  padding:8px 10px;font-size:12px;font-family:inherit;background:var(--bg2);color:var(--text1)}
+.form-input:focus{outline:none;border-color:var(--blu)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.7rem}
+.modal-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.1rem;padding-top:.8rem;border-top:.5px solid var(--border)}
+
+/* ── PARTITA DOPPIA ── */
+.pd-header{display:grid;grid-template-columns:1fr 120px 120px 80px;gap:.5rem;
+  background:var(--bg3);padding:.5rem .8rem;border-radius:var(--radius);
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);
+  margin-bottom:.4rem}
+.pd-row{display:grid;grid-template-columns:1fr 120px 120px 80px;gap:.5rem;
+  padding:.4rem .8rem;border:.5px solid var(--border);border-radius:var(--radius);
+  margin-bottom:.3rem;background:var(--bg2);align-items:center}
+.pd-row.dare-row{border-left:3px solid var(--dare)}
+.pd-row.avere-row{border-left:3px solid var(--avere)}
+
+/* ── MASTRINO ── */
+.mastrino{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:1rem}
+.mastrino-header{background:var(--blu);color:#fff;padding:.6rem 1rem;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.mastrino-body{display:grid;grid-template-columns:auto 1fr 120px 120px 120px;font-size:11px}
+.mastrino-th{background:var(--bg3);padding:6px 10px;font-weight:700;font-size:10px;color:var(--text2);text-transform:uppercase;border-bottom:.5px solid var(--border)}
+.mastrino-td{padding:6px 10px;border-bottom:.5px solid var(--border)}
+.mastrino-saldo-dare{color:var(--dare);font-weight:700;text-align:right}
+.mastrino-saldo-avere{color:var(--avere);font-weight:700;text-align:right}
+
+/* ── BADGE SOCIETÀ ── */
+.badge-soc{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;text-transform:uppercase}
+.badge-v{background:#D6E4F7;color:#0D3B6E}
+.badge-d{background:#D6F0E4;color:#0A4D3C}
+.badge-i{background:#F5E6D0;color:#6B3A00}
+
+/* ── LOGIN ── */
+#login-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0D3B6E 0%,#1A5C38 50%,#6B3A00 100%)}
+#login-box{background:#fff;border-radius:16px;padding:2.2rem 2.6rem;width:360px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center}
+#login-box h2{font-size:1.3rem;font-weight:800;color:var(--blu);margin-bottom:.3rem}
+#login-box .sub{font-size:12px;color:#666;margin-bottom:1.4rem}
+#login-box .loghi{display:flex;justify-content:center;gap:14px;margin-bottom:1.2rem}
+#login-box .loghi img{width:44px;height:44px;object-fit:contain;border-radius:50%;border:2px solid #EEE}
+#login-box input{width:100%;box-sizing:border-box;border:1.5px solid #DDD;border-radius:8px;
+  padding:9px 12px;font-size:13px;font-family:inherit;margin-bottom:.7rem}
+#login-box input:focus{outline:none;border-color:var(--blu)}
+#login-box .btn-login{width:100%;background:var(--blu);color:#fff;border:none;border-radius:8px;
+  padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+#login-box .err{color:var(--rosso);font-size:12px;margin-top:.5rem;min-height:16px}
+
+/* ── USER BAR ── */
+#user-bar{padding:.5rem 1rem;display:flex;align-items:center;gap:.6rem}
+#user-bar-name{font-size:11px;font-weight:700;color:#fff}
+#ruolo-badge{font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.2);color:#fff}
+
+/* ── RESPONSIVE ── */
+#hamburger{display:none;position:fixed;top:10px;left:10px;z-index:1000;
+  background:var(--blu);color:#fff;border:none;border-radius:8px;
+  padding:8px 11px;font-size:18px;cursor:pointer}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:998}
+#sidebar-overlay.visible{display:block}
+
+@media(max-width:768px){
+  #hamburger{display:block}
+  .sidebar{position:fixed;left:-250px;top:0;bottom:0;width:250px;z-index:999;transition:left .25s}
+  .sidebar.open{left:0;box-shadow:4px 0 20px rgba(0,0,0,.3)}
+  .content{width:100%}
+  .page{padding:.8rem;padding-top:3.2rem}
+  .two-col,.three-col{grid-template-columns:1fr}
+  .modal{width:96vw;padding:1rem}
+  .metrics{grid-template-columns:1fr 1fr}
+}
+
+@media print{
+  .sidebar,#hamburger,.toolbar,.btn,.btn-del{display:none!important}
+  .page{display:block!important;padding:.5rem}
+}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-overlay">
+  <div id="login-box">
+    <div class="loghi" id="login-loghi"></div>
+    <h2>Gruppo Virtus</h2>
+    <div class="sub">Gestionale Contabile 2026/2027</div>
+    <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+    <input type="password" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">Accedi</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ── HAMBURGER ── -->
+<button id="hamburger" onclick="toggleSidebar()">☰</button>
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- ── APP ── -->
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem" id="sidebar-loghi"></div>
+      <h2>Gruppo Virtus</h2>
+      <div class="sub">Gestionale Contabile 2026/2027</div>
+    </div>
+
+    <div class="nav-section">Contabilità</div>
+    <button class="nav-item" id="nav-home" onclick="showPage('home',this)"><span class="icon">🏠</span>Home</button>
+    <button class="nav-item" onclick="showPage('primanota',this)"><span class="icon">📒</span>Prima Nota</button>
+    <button class="nav-item" onclick="showPage('mastrini',this)"><span class="icon">📋</span>Mastrini</button>
+    <button class="nav-item" onclick="showPage('bilancio-apertura',this)"><span class="icon">⚖️</span>Bilancio Apertura</button>
+
+    <div class="nav-section">Analisi</div>
+    <button class="nav-item" onclick="showPage('conto-economico',this)"><span class="icon">📊</span>Conto Economico</button>
+    <button class="nav-item" onclick="showPage('scadenzario',this)"><span class="icon">📅</span>Scadenzario</button>
+    <button class="nav-item" onclick="showPage('situazione-patrimoniale',this)"><span class="icon">🏛</span>Situazione Patrimoniale</button>
+
+    <div class="nav-section">Archivio</div>
+    <button class="nav-item" onclick="showPage('archivio',this)"><span class="icon">🗄</span>Archivio 2025/2026</button>
+
+    <div class="nav-section">Impostazioni</div>
+    <button class="nav-item" onclick="showPage('piano-conti',this)"><span class="icon">🗃</span>Piano dei Conti</button>
+    <button class="nav-item perm-admin" onclick="showPage('utenti',this)"><span class="icon">👥</span>Utenti</button>
+
+    <div class="sidebar-bottom">
+      <div id="user-bar">
+        <div style="flex:1">
+          <div id="user-bar-name"></div>
+          <div id="ruolo-badge"></div>
+        </div>
+      </div>
+      <button id="logout-btn" onclick="doLogout()" style="display:none;width:100%;background:rgba(255,255,255,.1);color:#fff;border:none;border-radius:6px;padding:6px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:.4rem">🚪 Esci</button>
+      <div style="margin-top:.6rem;display:flex;gap:4px">
+        <button onclick="esportaBackup()" style="flex:1;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:5px 4px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">📥 Backup</button>
+        <label style="flex:1;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:5px 4px;font-size:10px;font-weight:700;cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center">
+          📤 Ripristina<input type="file" accept=".json" onchange="importaBackup(event)" style="display:none">
+        </label>
+      </div>
+    </div>
+  </div><!-- /sidebar -->
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- HOME -->
+    <div id="page-home" class="page active">
+      <div class="page-header">
+        <div class="page-title">🏠 Dashboard Contabile</div>
+        <div class="page-sub">Gruppo Virtus Molfetta — Stagione 2026/2027</div>
+      </div>
+      <div class="metrics" id="home-metrics"></div>
+      <div id="home-societa" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:1rem"></div>
+    </div>
+
+    <!-- PRIMA NOTA -->
+    <div id="page-primanota" class="page">
+      <div class="page-header">
+        <div class="page-title">📒 Prima Nota — Partita Doppia</div>
+        <div class="page-sub">Ogni registrazione deve avere dare = avere</div>
+      </div>
+      <div class="toolbar">
+        <select id="pn-filter-soc" class="form-input" style="width:auto" onchange="renderPrimaNota()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <select id="pn-filter-mese" class="form-input" style="width:auto" onchange="renderPrimaNota()">
+          <option value="">Tutti i mesi</option>
+        </select>
+        <input type="text" id="pn-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="renderPrimaNota()">
+        <button class="btn btn-dark" onclick="openModalPrimaNota()">+ Nuova registrazione</button>
+      </div>
+      <div class="tbl-wrap scrollx">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th><th>Soc.</th><th>Descrizione</th>
+              <th>Conto Dare</th><th style="text-align:right">Dare €</th>
+              <th>Conto Avere</th><th style="text-align:right">Avere €</th>
+              <th>Rif.</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-primanota"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MASTRINI -->
+    <div id="page-mastrini" class="page">
+      <div class="page-header">
+        <div class="page-title">📋 Mastrini</div>
+        <div class="page-sub">Situazione per singolo conto</div>
+      </div>
+      <div class="toolbar">
+        <select id="mast-soc" class="form-input" style="width:auto" onchange="buildMastrini()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <select id="mast-classe" class="form-input" style="width:auto" onchange="buildMastrini()">
+          <option value="">Tutte le classi</option>
+          <option value="1">1 — Attività</option>
+          <option value="2">2 — Passività</option>
+          <option value="3">3 — Patrimonio</option>
+          <option value="4">4 — Costi</option>
+          <option value="5">5 — Ricavi</option>
+        </select>
+        <input type="text" id="mast-search" class="form-input" placeholder="🔍 Cerca conto..." style="width:180px" oninput="buildMastrini()">
+      </div>
+      <div id="mastrini-container"></div>
+    </div>
+
+    <!-- BILANCIO APERTURA -->
+    <div id="page-bilancio-apertura" class="page">
+      <div class="page-header">
+        <div class="page-title">⚖️ Bilancio di Apertura</div>
+        <div class="page-sub">Saldi iniziali al 01/07/2026 — Dare = Avere</div>
+      </div>
+      <div class="toolbar">
+        <select id="ba-soc" class="form-input" style="width:auto" onchange="renderBilancioApertura()">
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <button class="btn btn-dark" onclick="openModalApertura()">+ Aggiungi saldo iniziale</button>
+      </div>
+      <div class="metrics" id="ba-metrics"></div>
+      <div class="tbl-wrap scrollx" style="margin-top:.8rem">
+        <table>
+          <thead>
+            <tr>
+              <th>Conto</th><th>Descrizione</th>
+              <th style="text-align:right;color:#ffcdd2">Dare €</th>
+              <th style="text-align:right;color:#c8e6c9">Avere €</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-apertura"></tbody>
+          <tfoot id="tfoot-apertura"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- CONTO ECONOMICO -->
+    <div id="page-conto-economico" class="page">
+      <div class="page-header">
+        <div class="page-title">📊 Conto Economico</div>
+        <div class="page-sub">Costi e Ricavi — Classi 4 e 5</div>
+      </div>
+      <div class="toolbar">
+        <select id="ce-soc" class="form-input" style="width:auto" onchange="buildContoEconomico()">
+          <option value="">Gruppo completo</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+      <div id="ce-container"></div>
+    </div>
+
+    <!-- SCADENZARIO -->
+    <div id="page-scadenzario" class="page">
+      <div class="page-header">
+        <div class="page-title">📅 Scadenzario</div>
+        <div class="page-sub">Crediti e debiti con scadenza — da registrazioni con data scadenza</div>
+      </div>
+      <div class="toolbar">
+        <select id="scad-soc" class="form-input" style="width:auto" onchange="buildScadenzario()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <select id="scad-tipo" class="form-input" style="width:auto" onchange="buildScadenzario()">
+          <option value="">Tutti</option>
+          <option value="credito">Crediti</option>
+          <option value="debito">Debiti</option>
+        </select>
+        <select id="scad-stato" class="form-input" style="width:auto" onchange="buildScadenzario()">
+          <option value="">Tutti gli stati</option>
+          <option value="aperto">Aperto</option>
+          <option value="scaduto">Scaduto</option>
+          <option value="pagato">Saldato</option>
+        </select>
+      </div>
+      <div class="metrics" id="scad-metrics"></div>
+      <div class="tbl-wrap scrollx" style="margin-top:.8rem">
+        <table>
+          <thead>
+            <tr>
+              <th>Scadenza</th><th>Soc.</th><th>Tipo</th><th>Controparte</th>
+              <th>Conto</th><th style="text-align:right">Importo €</th>
+              <th style="text-align:right">Saldato €</th>
+              <th>Stato</th><th>Note</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-scadenzario"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SITUAZIONE PATRIMONIALE -->
+    <div id="page-situazione-patrimoniale" class="page">
+      <div class="page-header">
+        <div class="page-title">🏛 Situazione Patrimoniale</div>
+        <div class="page-sub">Attività e Passività — Classi 1, 2 e 3</div>
+      </div>
+      <div class="toolbar">
+        <select id="sp-soc" class="form-input" style="width:auto" onchange="buildSituazionePatrimoniale()">
+          <option value="">Gruppo completo</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+      <div id="sp-container"></div>
+    </div>
+
+    <!-- ARCHIVIO 2025/2026 -->
+    <div id="page-archivio" class="page">
+      <div class="page-header">
+        <div class="page-title">🗄 Archivio 2025/2026</div>
+        <div class="page-sub">Dati storici dal gestionale precedente — sola lettura</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-dark" onclick="caricaArchivio()">📂 Carica backup JSON</button>
+        <input type="file" id="archivio-input" accept=".json" onchange="leggiArchivio(event)" style="display:none">
+      </div>
+      <div id="archivio-tabs" style="display:none">
+        <div style="display:flex;gap:.5rem;margin-bottom:.8rem;flex-wrap:wrap">
+          <button class="btn active" onclick="switchArchivio('pn',this)">Prima Nota</button>
+          <button class="btn" onclick="switchArchivio('preventivo',this)">Preventivo</button>
+          <button class="btn" onclick="switchArchivio('contratti',this)">Contratti</button>
+          <button class="btn" onclick="switchArchivio('fatture',this)">Fatture</button>
+          <button class="btn" onclick="switchArchivio('insolute',this)">Fatture Insolute</button>
+        </div>
+        <div id="archivio-content"></div>
+      </div>
+      <div id="archivio-placeholder" style="padding:2rem;text-align:center;color:var(--text3)">
+        Carica il backup JSON del gestionale 2025/2026 per visualizzare i dati storici
+      </div>
+    </div>
+
+    <!-- PIANO DEI CONTI -->
+    <div id="page-piano-conti" class="page">
+      <div class="page-header">
+        <div class="page-title">🗃 Piano dei Conti</div>
+        <div class="page-sub">Struttura gerarchica — Classe → Gruppo → Conto → Sottoconto</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-dark" onclick="openModalNuovoConto()">+ Nuovo conto</button>
+        <input type="text" id="pdc-search" class="form-input" placeholder="🔍 Cerca conto..." style="width:200px" oninput="renderPianoConti()">
+      </div>
+      <div id="pdc-container"></div>
+    </div>
+
+    <!-- UTENTI -->
+    <div id="page-utenti" class="page">
+      <div class="page-header">
+        <div class="page-title">👥 Gestione Utenti</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn" onclick="caricaUtenti()">🔄 Aggiorna</button>
+      </div>
+      <div id="utenti-container"></div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<!-- MODAL PRIMA NOTA -->
+<div class="modal-overlay" id="modal-primanota" onclick="if(event.target===this)chiudiModal('modal-primanota')">
+  <div class="modal" style="width:680px">
+    <div class="modal-title">📒 Nuova Registrazione</div>
+    <div class="two-col">
+      <div class="form-row">
+        <label class="form-label">Data</label>
+        <input type="date" class="form-input" id="pn-data">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Società</label>
+        <select class="form-input" id="pn-soc">
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Descrizione</label>
+      <input type="text" class="form-input" id="pn-desc" placeholder="Descrizione dell'operazione...">
+    </div>
+
+    <!-- Righe dare/avere -->
+    <div style="margin:.8rem 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Movimenti contabili</div>
+        <button class="btn" onclick="aggiungiRigaPD()" style="font-size:10px;padding:3px 10px">+ Riga</button>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 1fr 130px 130px 28px;gap:.4rem;margin-bottom:.3rem;padding:0 .2rem">
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Tipo</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Conto</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;text-align:right">Dare €</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;text-align:right">Avere €</div>
+        <div></div>
+      </div>
+      <div id="pd-righe"></div>
+      <div id="pd-saldo-check" style="text-align:right;font-size:11px;margin-top:.5rem;font-weight:700"></div>
+    </div>
+
+    <div class="two-col">
+      <div class="form-row">
+        <label class="form-label">Data scadenza (opzionale)</label>
+        <input type="date" class="form-input" id="pn-scadenza">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Riferimento (n° fattura, ecc.)</label>
+        <input type="text" class="form-input" id="pn-rif" placeholder="es. FT 001/2026">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Note aggiuntive</label>
+      <input type="text" class="form-input" id="pn-note" placeholder="Note...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-primanota')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaPrimaNota()">Salva registrazione</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL BILANCIO APERTURA -->
+<div class="modal-overlay" id="modal-apertura" onclick="if(event.target===this)chiudiModal('modal-apertura')">
+  <div class="modal">
+    <div class="modal-title">⚖️ Saldo Iniziale</div>
+    <div class="form-row">
+      <label class="form-label">Conto</label>
+      <input type="text" class="form-input" id="ba-conto" list="pdc-datalist" placeholder="Cerca conto...">
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label class="form-label" style="color:var(--dare)">Dare € (attività / costi)</label>
+        <input type="number" class="form-input" id="ba-dare" placeholder="0" min="0">
+      </div>
+      <div class="form-row">
+        <label class="form-label" style="color:var(--avere)">Avere € (passività / ricavi)</label>
+        <input type="number" class="form-input" id="ba-avere" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Note</label>
+      <input type="text" class="form-input" id="ba-note" placeholder="es. saldo banca al 01/07/2026">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-apertura')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaApertura()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUOVO CONTO -->
+<div class="modal-overlay" id="modal-nuovo-conto" onclick="if(event.target===this)chiudiModal('modal-nuovo-conto')">
+  <div class="modal">
+    <div class="modal-title">🗃 Nuovo Conto</div>
+    <div class="two-col">
+      <div class="form-row">
+        <label class="form-label">Classe</label>
+        <select class="form-input" id="nc-classe" onchange="filtraGruppiConto()">
+          <option value="1">1 — Attività</option>
+          <option value="2">2 — Passività</option>
+          <option value="3">3 — Patrimonio</option>
+          <option value="4">4 — Costi</option>
+          <option value="5">5 — Ricavi</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Tipo</label>
+        <select class="form-input" id="nc-tipo">
+          <option value="gruppo">Gruppo</option>
+          <option value="conto">Conto</option>
+          <option value="sottoconto">Sottoconto</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Conto padre (se sottoconto)</label>
+      <input type="text" class="form-input" id="nc-padre" list="pdc-datalist" placeholder="Lascia vuoto se è un gruppo principale">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Codice conto (es. 1.1.1)</label>
+      <input type="text" class="form-input" id="nc-codice" placeholder="es. 1.1.1">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Nome conto</label>
+      <input type="text" class="form-input" id="nc-nome" placeholder="es. Cassa contante">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Note / descrizione</label>
+      <input type="text" class="form-input" id="nc-note" placeholder="Descrizione opzionale">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-nuovo-conto')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaNuovoConto()">Salva conto</button>
+    </div>
+  </div>
+</div>
+
+<!-- datalist per autocompletamento conti -->
+<datalist id="pdc-datalist"></datalist>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// COSTANTI
+// ══════════════════════════════════════════════════════════════
+const SOC = ['VIRTUS','DINAMO','INVICTA'];
+const SOC_CLR = { VIRTUS:'#0D3B6E', DINAMO:'#0A4D3C', INVICTA:'#6B3A00' };
+const MESI = ['Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre',
+              'Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno'];
+const STAGIONE_START = '2026-07-01';
+
+// ── LOGHI (base64 — da sostituire con quelli reali) ──
+const LOGO = { VIRTUS:'', DINAMO:'', INVICTA:'' };
+
+// ══════════════════════════════════════════════════════════════
+// PIANO DEI CONTI — struttura base predefinita
+// ══════════════════════════════════════════════════════════════
+let pianoConti = [
+  // CLASSE 1 — ATTIVITÀ
+  { id:'1',     codice:'1',     nome:'ATTIVITÀ',              classe:1, tipo:'classe',    padre:null },
+  { id:'1.1',   codice:'1.1',   nome:'Disponibilità liquide', classe:1, tipo:'gruppo',    padre:'1' },
+  { id:'1.1.1', codice:'1.1.1', nome:'Cassa contante',        classe:1, tipo:'conto',     padre:'1.1', soc:null },
+  { id:'1.1.2', codice:'1.1.2', nome:'Banca',                 classe:1, tipo:'gruppo',    padre:'1.1' },
+  { id:'1.2',   codice:'1.2',   nome:'Crediti',               classe:1, tipo:'gruppo',    padre:'1' },
+  { id:'1.2.1', codice:'1.2.1', nome:'Crediti verso sponsor', classe:1, tipo:'gruppo',    padre:'1.2' },
+  { id:'1.2.2', codice:'1.2.2', nome:'Crediti IVA',           classe:1, tipo:'conto',     padre:'1.2' },
+  { id:'1.2.3', codice:'1.2.3', nome:'Anticipi da soci',      classe:1, tipo:'gruppo',    padre:'1.2' },
+  { id:'1.2.4', codice:'1.2.4', nome:'Altri crediti',         classe:1, tipo:'conto',     padre:'1.2' },
+
+  // CLASSE 2 — PASSIVITÀ
+  { id:'2',     codice:'2',     nome:'PASSIVITÀ',             classe:2, tipo:'classe',    padre:null },
+  { id:'2.1',   codice:'2.1',   nome:'Debiti verso fornitori',classe:2, tipo:'gruppo',    padre:'2' },
+  { id:'2.2',   codice:'2.2',   nome:'Debiti verso staff',    classe:2, tipo:'gruppo',    padre:'2' },
+  { id:'2.3',   codice:'2.3',   nome:'Debiti verso sponsor',  classe:2, tipo:'gruppo',    padre:'2' },
+  { id:'2.4',   codice:'2.4',   nome:'Debiti tributari',      classe:2, tipo:'gruppo',    padre:'2' },
+  { id:'2.4.1', codice:'2.4.1', nome:'IVA a debito',          classe:2, tipo:'conto',     padre:'2.4', soc:'VIRTUS' },
+  { id:'2.4.2', codice:'2.4.2', nome:'IVA 398 a debito (50%)',classe:2, tipo:'conto',     padre:'2.4', soc:'INVICTA' },
+  { id:'2.4.3', codice:'2.4.3', nome:'Altri debiti tributari',classe:2, tipo:'conto',     padre:'2.4' },
+  { id:'2.5',   codice:'2.5',   nome:'Altri debiti',          classe:2, tipo:'conto',     padre:'2' },
+
+  // CLASSE 3 — PATRIMONIO NETTO
+  { id:'3',     codice:'3',     nome:'PATRIMONIO NETTO',      classe:3, tipo:'classe',    padre:null },
+  { id:'3.1',   codice:'3.1',   nome:'Patrimonio iniziale',   classe:3, tipo:'conto',     padre:'3' },
+  { id:'3.2',   codice:'3.2',   nome:'Utile/Perdita prec.',   classe:3, tipo:'conto',     padre:'3' },
+  { id:'3.3',   codice:'3.3',   nome:'Risultato esercizio',   classe:3, tipo:'conto',     padre:'3' },
+
+  // CLASSE 4 — COSTI
+  { id:'4',     codice:'4',     nome:'COSTI',                 classe:4, tipo:'classe',    padre:null },
+  { id:'4.1',   codice:'4.1',   nome:'Costo Personale',       classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.1.1', codice:'4.1.1', nome:'Staff Tecnico',         classe:4, tipo:'gruppo',    padre:'4.1' },
+  { id:'4.1.2', codice:'4.1.2', nome:'Staff Amministrativo',  classe:4, tipo:'gruppo',    padre:'4.1' },
+  { id:'4.1.3', codice:'4.1.3', nome:'Staff Operativo',       classe:4, tipo:'gruppo',    padre:'4.1' },
+  { id:'4.1.4', codice:'4.1.4', nome:'Staff Comunicazione',   classe:4, tipo:'gruppo',    padre:'4.1' },
+  { id:'4.2',   codice:'4.2',   nome:'Federazione',           classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.2.1', codice:'4.2.1', nome:'Quote iscrizione',      classe:4, tipo:'conto',     padre:'4.2' },
+  { id:'4.2.2', codice:'4.2.2', nome:'Tesseramento atleti',   classe:4, tipo:'conto',     padre:'4.2' },
+  { id:'4.3',   codice:'4.3',   nome:'Costi Immobili',        classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.3.1', codice:'4.3.1', nome:'Affitti impianti',      classe:4, tipo:'conto',     padre:'4.3' },
+  { id:'4.3.2', codice:'4.3.2', nome:'Utenze',                classe:4, tipo:'conto',     padre:'4.3' },
+  { id:'4.4',   codice:'4.4',   nome:'Attività Sportiva',     classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.5',   codice:'4.5',   nome:'Costi Amministrativi',  classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.6',   codice:'4.6',   nome:'Oneri Fiscali',         classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.7',   codice:'4.7',   nome:'Pregressi 25/26',       classe:4, tipo:'gruppo',    padre:'4' },
+  { id:'4.7.1', codice:'4.7.1', nome:'Debiti v/sponsor preg.',classe:4, tipo:'gruppo',    padre:'4.7' },
+
+  // CLASSE 5 — RICAVI
+  { id:'5',     codice:'5',     nome:'RICAVI',                classe:5, tipo:'classe',    padre:null },
+  { id:'5.1',   codice:'5.1',   nome:'Sponsorizzazioni',      classe:5, tipo:'gruppo',    padre:'5' },
+  { id:'5.1.1', codice:'5.1.1', nome:'Ricavi sponsorizzazioni',classe:5,tipo:'gruppo',    padre:'5.1' },
+  { id:'5.1.2', codice:'5.1.2', nome:'IVA 398 a ricavo',      classe:5, tipo:'conto',     padre:'5.1', soc:'INVICTA' },
+  { id:'5.2',   codice:'5.2',   nome:'Botteghino',            classe:5, tipo:'gruppo',    padre:'5', soc:'VIRTUS' },
+  { id:'5.2.1', codice:'5.2.1', nome:'Abbonamenti',           classe:5, tipo:'conto',     padre:'5.2', soc:'VIRTUS' },
+  { id:'5.2.2', codice:'5.2.2', nome:'Biglietti',             classe:5, tipo:'conto',     padre:'5.2', soc:'VIRTUS' },
+  { id:'5.3',   codice:'5.3',   nome:'Altri ricavi',          classe:5, tipo:'conto',     padre:'5' },
+];
+
+// ══════════════════════════════════════════════════════════════
+// DATI RUNTIME
+// ══════════════════════════════════════════════════════════════
+let registrazioni = []; // Prima Nota in partita doppia
+let bilancioApertura = []; // Saldi iniziali per società
+let scadenzario = []; // Voci con data scadenza
+let archivioVecchio = null; // Dati dal gestionale precedente
+
+// ══════════════════════════════════════════════════════════════
+// UTILITY
+// ══════════════════════════════════════════════════════════════
+function fmt(n){ return new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n||0); }
+function fmtData(d){ if(!d)return'—'; const dt=new Date(d); return dt.toLocaleDateString('it-IT'); }
+function genId(){ return '_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
+
+function showPage(id, el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const pg = document.getElementById('page-'+id);
+  if(pg) pg.classList.add('active');
+  if(el) el.classList.add('active');
+  closeSidebar();
+  const builds = {
+    'home': buildHome,
+    'primanota': renderPrimaNota,
+    'mastrini': buildMastrini,
+    'bilancio-apertura': renderBilancioApertura,
+    'conto-economico': buildContoEconomico,
+    'scadenzario': buildScadenzario,
+    'situazione-patrimoniale': buildSituazionePatrimoniale,
+    'piano-conti': renderPianoConti,
+    'utenti': caricaUtenti,
+  };
+  if(builds[id]) builds[id]();
+}
+
+function chiudiModal(id){ document.getElementById(id).style.display='none'; }
+function apriModal(id){ document.getElementById(id).style.display='flex'; }
+
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('visible');
+}
+function closeSidebar(){
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+}
+
+// Restituisce tutti i conti foglia (tipo conto o sottoconto) del piano
+function getContiSelezionabili(soc){
+  return pianoConti.filter(c => c.tipo !== 'classe' && c.tipo !== 'gruppo' ||
+    (c.tipo === 'gruppo' && !pianoConti.some(x => x.padre === c.id)));
+}
+
+function getNomeContoById(id){
+  const c = pianoConti.find(x=>x.id===id);
+  return c ? `${c.codice} — ${c.nome}` : id||'—';
+}
+
+// Aggiorna il datalist per autocompletamento
+function aggiornaDatalist(){
+  const dl = document.getElementById('pdc-datalist');
+  if(!dl) return;
+  dl.innerHTML = pianoConti
+    .filter(c=>c.tipo==='conto'||c.tipo==='sottoconto')
+    .map(c=>`<option value="${c.codice} — ${c.nome}">`)
+    .join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// HOME
+// ══════════════════════════════════════════════════════════════
+function buildHome(){
+  // Totali da registrazioni
+  const totDare  = registrazioni.reduce((s,r)=>s+r.righe.reduce((a,x)=>a+(x.dare||0),0),0);
+  const totAvere = registrazioni.reduce((s,r)=>s+r.righe.reduce((a,x)=>a+(x.avere||0),0),0);
+  const nReg = registrazioni.length;
+
+  // Conto economico rapido
+  const ricavi = calcolaSaldi(5, null);
+  const costi  = calcolaSaldi(4, null);
+  const risultato = ricavi - costi;
+
+  document.getElementById('home-metrics').innerHTML = `
+    <div class="metric"><div class="metric-label">Registrazioni</div><div class="metric-value">${nReg}</div></div>
+    <div class="metric"><div class="metric-label">Totale Ricavi</div><div class="metric-value avere">${fmt(ricavi)}</div></div>
+    <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value dare">${fmt(costi)}</div></div>
+    <div class="metric"><div class="metric-label">Risultato</div><div class="metric-value ${risultato>=0?'avere':'dare'}">${fmt(risultato)}</div></div>
+    <div class="metric"><div class="metric-label">Equilibrio PD</div><div class="metric-value ${Math.abs(totDare-totAvere)<0.01?'avere':'dare'}">${Math.abs(totDare-totAvere)<0.01?'✅ OK':'⚠️ '+fmt(Math.abs(totDare-totAvere))}</div></div>
+  `;
+
+  document.getElementById('home-societa').innerHTML = SOC.map(s=>{
+    const ric = calcolaSaldi(5,s);
+    const cos = calcolaSaldi(4,s);
+    const ris = ric-cos;
+    return `<div style="background:#fff;border-radius:8px;border:.5px solid var(--border);overflow:hidden">
+      <div style="background:${SOC_CLR[s]};padding:.7rem 1rem;color:#fff;font-weight:800;font-size:13px">${s}</div>
+      <div style="padding:.8rem 1rem">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:.3rem">
+          <span style="color:var(--text2)">Ricavi</span><b style="color:var(--avere)">${fmt(ric)}</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:.3rem">
+          <span style="color:var(--text2)">Costi</span><b style="color:var(--dare)">${fmt(cos)}</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;border-top:.5px solid var(--border);padding-top:.3rem;margin-top:.3rem">
+          <span style="color:var(--text2)">Risultato</span><b style="color:${ris>=0?'var(--avere)':'var(--dare)'}">${fmt(ris)}</b>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Calcola saldo di una classe per una società
+function calcolaSaldi(classe, soc){
+  let totale = 0;
+  registrazioni.filter(r=>!soc||r.soc===soc).forEach(r=>{
+    r.righe.forEach(riga=>{
+      const conto = pianoConti.find(c=>c.id===riga.contoId);
+      if(!conto) return;
+      const cl = parseInt(conto.classe||conto.codice?.split('.')[0]);
+      if(cl===classe){
+        // Per classi 4 (costi): dare aumenta, avere diminuisce
+        // Per classi 5 (ricavi): avere aumenta, dare diminuisce
+        if(classe===4||classe===1) totale += (riga.dare||0)-(riga.avere||0);
+        if(classe===5||classe===2) totale += (riga.avere||0)-(riga.dare||0);
+      }
+    });
+  });
+  // Aggiungi bilancio apertura
+  bilancioApertura.filter(b=>!soc||b.soc===soc).forEach(b=>{
+    const conto = pianoConti.find(c=>c.id===b.contoId);
+    if(!conto) return;
+    const cl = parseInt(conto.classe||conto.codice?.split('.')[0]);
+    if(cl===classe){
+      if(classe===4||classe===1) totale += (b.dare||0)-(b.avere||0);
+      if(classe===5||classe===2) totale += (b.avere||0)-(b.dare||0);
+    }
+  });
+  return totale;
+}
+
+// ══════════════════════════════════════════════════════════════
+// PRIMA NOTA
+// ══════════════════════════════════════════════════════════════
+let _editRegId = null;
+let _pdRighe = [];
+
+function openModalPrimaNota(id){
+  _editRegId = id || null;
+  const reg = id ? registrazioni.find(r=>r.id===id) : null;
+  document.getElementById('pn-data').value = reg ? reg.data : new Date().toISOString().slice(0,10);
+  document.getElementById('pn-soc').value  = reg ? reg.soc : 'VIRTUS';
+  document.getElementById('pn-desc').value = reg ? reg.desc : '';
+  document.getElementById('pn-rif').value  = reg ? reg.rif||'' : '';
+  document.getElementById('pn-note').value = reg ? reg.note||'' : '';
+  document.getElementById('pn-scadenza').value = reg ? reg.scadenza||'' : '';
+  _pdRighe = reg ? JSON.parse(JSON.stringify(reg.righe)) : [
+    { tipo:'dare',  contoId:'', dare:0,   avere:0 },
+    { tipo:'avere', contoId:'', dare:0,   avere:0 },
+  ];
+  renderPDRighe();
+  apriModal('modal-primanota');
+}
+
+function renderPDRighe(){
+  const cont = document.getElementById('pd-righe');
+  cont.innerHTML = _pdRighe.map((r,i)=>`
+    <div style="display:grid;grid-template-columns:80px 1fr 130px 130px 28px;gap:.4rem;margin-bottom:.35rem;align-items:center">
+      <select class="form-input" style="font-size:11px;padding:5px 6px" onchange="_pdRighe[${i}].tipo=this.value;aggiornaSaldoPD()">
+        <option value="dare"  ${r.tipo==='dare'?'selected':''} style="color:var(--dare)">DARE</option>
+        <option value="avere" ${r.tipo==='avere'?'selected':''} style="color:var(--avere)">AVERE</option>
+      </select>
+      <input type="text" class="form-input" list="pdc-datalist" value="${getNomeContoById(r.contoId)}"
+        style="font-size:11px;padding:5px 8px"
+        onchange="selezionaConto(${i},this.value)"
+        placeholder="Cerca conto...">
+      <input type="number" class="form-input" value="${r.dare||''}"
+        style="font-size:11px;padding:5px 8px;text-align:right;${r.tipo==='dare'?'border-color:var(--dare)':''}"
+        placeholder="0" oninput="_pdRighe[${i}].dare=parseFloat(this.value)||0;aggiornaSaldoPD()">
+      <input type="number" class="form-input" value="${r.avere||''}"
+        style="font-size:11px;padding:5px 8px;text-align:right;${r.tipo==='avere'?'border-color:var(--avere)':''}"
+        placeholder="0" oninput="_pdRighe[${i}].avere=parseFloat(this.value)||0;aggiornaSaldoPD()">
+      <button class="btn-del" onclick="_pdRighe.splice(${i},1);renderPDRighe()" style="padding:2px 6px">✕</button>
+    </div>`).join('');
+  aggiornaSaldoPD();
+}
+
+function selezionaConto(idx, val){
+  // Cerca il conto per codice o nome
+  const conto = pianoConti.find(c=>`${c.codice} — ${c.nome}` === val || c.id === val || c.nome === val);
+  _pdRighe[idx].contoId = conto ? conto.id : val;
+}
+
+function aggiungiRigaPD(){
+  _pdRighe.push({ tipo:'dare', contoId:'', dare:0, avere:0 });
+  renderPDRighe();
+}
+
+function aggiornaSaldoPD(){
+  const totDare  = _pdRighe.reduce((s,r)=>s+(parseFloat(r.dare)||0),0);
+  const totAvere = _pdRighe.reduce((s,r)=>s+(parseFloat(r.avere)||0),0);
+  const diff = Math.abs(totDare-totAvere);
+  const el = document.getElementById('pd-saldo-check');
+  if(diff < 0.01){
+    el.innerHTML = `<span style="color:var(--avere)">✅ Dare = Avere = ${fmt(totDare)}</span>`;
+  } else {
+    el.innerHTML = `<span style="color:var(--dare)">⚠️ Differenza: ${fmt(diff)} — Dare: ${fmt(totDare)} / Avere: ${fmt(totAvere)}</span>`;
+  }
+}
+
+function salvaPrimaNota(){
+  const data = document.getElementById('pn-data').value;
+  const soc  = document.getElementById('pn-soc').value;
+  const desc = document.getElementById('pn-desc').value.trim();
+  if(!data||!soc||!desc){ alert('Compila almeno data, società e descrizione.'); return; }
+  if(_pdRighe.length < 2){ alert('Inserisci almeno due righe (dare e avere).'); return; }
+
+  const totDare  = _pdRighe.reduce((s,r)=>s+(parseFloat(r.dare)||0),0);
+  const totAvere = _pdRighe.reduce((s,r)=>s+(parseFloat(r.avere)||0),0);
+  if(Math.abs(totDare-totAvere) > 0.01){
+    alert(`Errore: Dare (${fmt(totDare)}) ≠ Avere (${fmt(totAvere)}). La registrazione non è in equilibrio.`);
+    return;
+  }
+
+  const rec = {
+    id:       _editRegId || genId(),
+    data, soc, desc,
+    rif:      document.getElementById('pn-rif').value.trim(),
+    note:     document.getElementById('pn-note').value.trim(),
+    scadenza: document.getElementById('pn-scadenza').value||null,
+    righe:    _pdRighe.map(r=>({...r, dare:parseFloat(r.dare)||0, avere:parseFloat(r.avere)||0})),
+    creatoIl: new Date().toISOString(),
+  };
+
+  if(_editRegId){
+    const idx = registrazioni.findIndex(r=>r.id===_editRegId);
+    if(idx!==-1) registrazioni[idx]=rec;
+  } else {
+    registrazioni.push(rec);
+  }
+
+  // Aggiorna scadenzario se c'è data scadenza
+  if(rec.scadenza) aggiornaScadenzario(rec);
+
+  chiudiModal('modal-primanota');
+  renderPrimaNota();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+function aggiornaScadenzario(reg){
+  // Crea/aggiorna voci scadenzario per ogni riga con conto crediti/debiti
+  reg.righe.forEach(riga=>{
+    const conto = pianoConti.find(c=>c.id===riga.contoId);
+    if(!conto) return;
+    const cl = parseInt(conto.codice?.split('.')[0]);
+    if(cl!==1 && cl!==2) return; // solo conti patrimoniali finanziari
+    const importo = (riga.dare||0) + (riga.avere||0);
+    if(!importo) return;
+    const tipo = cl===1 ? 'credito' : 'debito';
+    const esiste = scadenzario.find(s=>s.regId===reg.id&&s.contoId===riga.contoId);
+    if(esiste){
+      esiste.importo=importo; esiste.scadenza=reg.scadenza; esiste.desc=reg.desc;
+    } else {
+      scadenzario.push({
+        id: genId(), regId:reg.id, soc:reg.soc, tipo,
+        contoId:riga.contoId, controparte:reg.desc,
+        importo, saldato:0, scadenza:reg.scadenza,
+        stato:'aperto', note:reg.rif||''
+      });
+    }
+  });
+}
+
+function renderPrimaNota(){
+  const filtSoc  = document.getElementById('pn-filter-soc')?.value||'';
+  const filtMese = document.getElementById('pn-filter-mese')?.value||'';
+  const search   = document.getElementById('pn-search')?.value?.toLowerCase()||'';
+
+  let righe = registrazioni.filter(r=>{
+    if(filtSoc && r.soc!==filtSoc) return false;
+    if(search && !r.desc.toLowerCase().includes(search) && !r.rif?.toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a,b)=>b.data.localeCompare(a.data));
+
+  const tbody = document.getElementById('tbody-primanota');
+  if(!tbody) return;
+
+  if(!righe.length){
+    tbody.innerHTML='<tr><td colspan="9" style="padding:1.5rem;text-align:center;color:var(--text3)">Nessuna registrazione</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = righe.map(reg=>{
+    const totDare  = reg.righe.reduce((s,r)=>s+(r.dare||0),0);
+    const totAvere = reg.righe.reduce((s,r)=>s+(r.avere||0),0);
+    // Prima riga dare principale
+    const rigaDare  = reg.righe.find(r=>r.dare>0)||reg.righe[0];
+    const rigaAvere = reg.righe.find(r=>r.avere>0)||reg.righe[1];
+    return `<tr>
+      <td style="white-space:nowrap">${fmtData(reg.data)}</td>
+      <td><span class="badge-soc badge-${reg.soc[0].toLowerCase()}">${reg.soc}</span></td>
+      <td style="font-weight:600">${reg.desc}</td>
+      <td style="color:var(--dare);font-size:11px">${getNomeContoById(rigaDare?.contoId)}</td>
+      <td class="dare-cell">${fmt(totDare)}</td>
+      <td style="color:var(--avere);font-size:11px">${getNomeContoById(rigaAvere?.contoId)}</td>
+      <td class="avere-cell">${fmt(totAvere)}</td>
+      <td style="font-size:10px;color:var(--text2)">${reg.rif||'—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn" style="font-size:10px;padding:2px 8px;margin-right:3px" onclick="openModalPrimaNota('${reg.id}')">✏</button>
+        <button class="btn-del" onclick="delRegistrazione('${reg.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function delRegistrazione(id){
+  if(!confirm('Eliminare questa registrazione?')) return;
+  registrazioni = registrazioni.filter(r=>r.id!==id);
+  scadenzario   = scadenzario.filter(s=>s.regId!==id);
+  renderPrimaNota();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+// ══════════════════════════════════════════════════════════════
+// BILANCIO DI APERTURA
+// ══════════════════════════════════════════════════════════════
+function openModalApertura(id){
+  const b = id ? bilancioApertura.find(x=>x.id===id) : null;
+  document.getElementById('ba-conto').value = b ? getNomeContoById(b.contoId) : '';
+  document.getElementById('ba-dare').value  = b ? b.dare||'' : '';
+  document.getElementById('ba-avere').value = b ? b.avere||'' : '';
+  document.getElementById('ba-note').value  = b ? b.note||'' : '';
+  document.getElementById('modal-apertura').dataset.editId = id||'';
+  apriModal('modal-apertura');
+}
+
+function salvaApertura(){
+  const contoStr = document.getElementById('ba-conto').value.trim();
+  const conto = pianoConti.find(c=>`${c.codice} — ${c.nome}`===contoStr||c.nome===contoStr||c.id===contoStr);
+  const dare  = parseFloat(document.getElementById('ba-dare').value)||0;
+  const avere = parseFloat(document.getElementById('ba-avere').value)||0;
+
+  if(!conto){ alert('Seleziona un conto valido dal Piano dei Conti.'); return; }
+  if(!dare && !avere){ alert('Inserisci almeno un importo in Dare o Avere.'); return; }
+
+  const soc = document.getElementById('ba-soc')?.value||'VIRTUS';
+  const editId = document.getElementById('modal-apertura').dataset.editId;
+  const rec = {
+    id: editId||genId(), soc, contoId:conto.id,
+    dare, avere, note:document.getElementById('ba-note').value.trim(),
+    data: STAGIONE_START
+  };
+
+  if(editId){
+    const idx = bilancioApertura.findIndex(x=>x.id===editId);
+    if(idx!==-1) bilancioApertura[idx]=rec;
+  } else {
+    bilancioApertura.push(rec);
+  }
+
+  chiudiModal('modal-apertura');
+  renderBilancioApertura();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+function renderBilancioApertura(){
+  const soc = document.getElementById('ba-soc')?.value||'VIRTUS';
+  const voci = bilancioApertura.filter(b=>b.soc===soc).sort((a,b)=>a.contoId?.localeCompare(b.contoId));
+  const totDare  = voci.reduce((s,b)=>s+(b.dare||0),0);
+  const totAvere = voci.reduce((s,b)=>s+(b.avere||0),0);
+  const equilibrio = Math.abs(totDare-totAvere) < 0.01;
+
+  document.getElementById('ba-metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Totale Dare</div><div class="metric-value dare">${fmt(totDare)}</div></div>
+    <div class="metric"><div class="metric-label">Totale Avere</div><div class="metric-value avere">${fmt(totAvere)}</div></div>
+    <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value ${equilibrio?'avere':'dare'}">${equilibrio?'✅ OK':'⚠️ '+fmt(Math.abs(totDare-totAvere))}</div></div>
+  `;
+
+  const tbody = document.getElementById('tbody-apertura');
+  tbody.innerHTML = voci.map((b,i)=>`
+    <tr style="background:${i%2?'var(--bg)':'var(--bg2)'}">
+      <td style="font-size:11px;color:var(--text2)">${b.contoId}</td>
+      <td style="font-weight:600">${getNomeContoById(b.contoId)}${b.note?`<br><span style="font-size:10px;color:var(--text2);font-style:italic">${b.note}</span>`:''}</td>
+      <td class="dare-cell">${b.dare?fmt(b.dare):'—'}</td>
+      <td class="avere-cell">${b.avere?fmt(b.avere):'—'}</td>
+      <td>
+        <button class="btn" style="font-size:10px;padding:2px 8px;margin-right:3px" onclick="openModalApertura('${b.id}')">✏</button>
+        <button class="btn-del" onclick="bilancioApertura=bilancioApertura.filter(x=>x.id!=='${b.id}');renderBilancioApertura();window.salvaEAggiorna&&window.salvaEAggiorna()">✕</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('tfoot-apertura').innerHTML=`
+    <tr style="font-weight:700;background:var(--bg3);border-top:2px solid var(--border2)">
+      <td colspan="2" style="padding:7px 10px">TOTALE</td>
+      <td class="dare-cell">${fmt(totDare)}</td>
+      <td class="avere-cell">${fmt(totAvere)}</td>
+      <td></td>
+    </tr>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// MASTRINI
+// ══════════════════════════════════════════════════════════════
+function buildMastrini(){
+  const filtSoc    = document.getElementById('mast-soc')?.value||'';
+  const filtClasse = document.getElementById('mast-classe')?.value||'';
+  const search     = document.getElementById('mast-search')?.value?.toLowerCase()||'';
+  const cont = document.getElementById('mastrini-container');
+  if(!cont) return;
+
+  // Trova tutti i conti che hanno movimenti
+  const contiUsati = new Set();
+  [...registrazioni, ...bilancioApertura].forEach(r=>{
+    if(filtSoc && r.soc!==filtSoc) return;
+    const righe = r.righe||[{contoId:r.contoId,dare:r.dare,avere:r.avere}];
+    righe.forEach(riga=>{ if(riga.contoId) contiUsati.add(riga.contoId); });
+  });
+
+  const contiDaMostrare = pianoConti.filter(c=>{
+    if(!contiUsati.has(c.id)) return false;
+    if(filtClasse && String(c.classe||c.codice?.split('.')[0])!==filtClasse) return false;
+    if(search && !c.nome.toLowerCase().includes(search) && !c.codice?.includes(search)) return false;
+    return true;
+  }).sort((a,b)=>a.codice?.localeCompare(b.codice));
+
+  if(!contiDaMostrare.length){
+    cont.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3)">Nessun conto con movimenti</div>';
+    return;
+  }
+
+  cont.innerHTML = contiDaMostrare.map(conto=>{
+    const movimenti = [];
+
+    // Saldo apertura
+    bilancioApertura.filter(b=>b.contoId===conto.id&&(!filtSoc||b.soc===filtSoc)).forEach(b=>{
+      movimenti.push({ data:STAGIONE_START, desc:'Saldo iniziale', dare:b.dare||0, avere:b.avere||0, soc:b.soc, tipo:'apertura' });
+    });
+
+    // Registrazioni
+    registrazioni.filter(r=>(!filtSoc||r.soc===filtSoc)).forEach(r=>{
+      r.righe.filter(riga=>riga.contoId===conto.id).forEach(riga=>{
+        movimenti.push({ data:r.data, desc:r.desc, dare:riga.dare||0, avere:riga.avere||0, soc:r.soc, rif:r.rif, tipo:'mov' });
+      });
+    });
+
+    movimenti.sort((a,b)=>a.data.localeCompare(b.data));
+
+    const totDare  = movimenti.reduce((s,m)=>s+m.dare,0);
+    const totAvere = movimenti.reduce((s,m)=>s+m.avere,0);
+    const cl = parseInt(conto.classe||conto.codice?.split('.')[0]);
+    const saldo = (cl===1||cl===4) ? totDare-totAvere : totAvere-totDare;
+    const saldoLabel = saldo>=0 ? (cl<=2?'Saldo Dare':'Saldo Dare') : 'Saldo Avere';
+
+    return `<div class="mastrino">
+      <div class="mastrino-header">
+        <span>${conto.codice} — ${conto.nome}</span>
+        <span>Saldo: ${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</span>
+      </div>
+      <div class="mastrino-body">
+        <div class="mastrino-th">Data</div>
+        <div class="mastrino-th">Descrizione</div>
+        <div class="mastrino-th" style="text-align:right;color:var(--dare)">Dare €</div>
+        <div class="mastrino-th" style="text-align:right;color:var(--avere)">Avere €</div>
+        <div class="mastrino-th" style="text-align:right">Saldo prog. €</div>
+        ${movimenti.map((m,i)=>{
+          let saldoProg = 0;
+          for(let j=0;j<=i;j++){
+            saldoProg += (cl===1||cl===4) ? movimenti[j].dare-movimenti[j].avere : movimenti[j].avere-movimenti[j].dare;
+          }
+          return `
+          <div class="mastrino-td" style="white-space:nowrap;font-size:11px">${fmtData(m.data)}</div>
+          <div class="mastrino-td" style="font-size:11px">${m.desc}${m.rif?` <span style="color:var(--text2)">(${m.rif})</span>`:''}</div>
+          <div class="mastrino-td" style="text-align:right;color:var(--dare)">${m.dare?fmt(m.dare):'—'}</div>
+          <div class="mastrino-td" style="text-align:right;color:var(--avere)">${m.avere?fmt(m.avere):'—'}</div>
+          <div class="mastrino-td ${saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}">${fmt(Math.abs(saldoProg))} ${saldoProg>=0?'D':'A'}</div>`;
+        }).join('')}
+        <div class="mastrino-td" style="font-weight:700;background:var(--bg3)">TOTALE</div>
+        <div class="mastrino-td" style="background:var(--bg3)"></div>
+        <div class="mastrino-td" style="text-align:right;font-weight:700;color:var(--dare);background:var(--bg3)">${fmt(totDare)}</div>
+        <div class="mastrino-td" style="text-align:right;font-weight:700;color:var(--avere);background:var(--bg3)">${fmt(totAvere)}</div>
+        <div class="mastrino-td ${saldo>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}" style="background:var(--bg3)">${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONTO ECONOMICO
+// ══════════════════════════════════════════════════════════════
+function buildContoEconomico(){
+  const soc = document.getElementById('ce-soc')?.value||'';
+  const cont = document.getElementById('ce-container');
+  if(!cont) return;
+
+  function getVociClasse(classe){
+    // Raggruppa per conto padre
+    const contiClasse = pianoConti.filter(c=>parseInt(c.classe||c.codice?.split('.')[0])===classe);
+    return contiClasse.map(conto=>{
+      const movimenti = [
+        ...bilancioApertura.filter(b=>b.contoId===conto.id&&(!soc||b.soc===soc)),
+        ...registrazioni.filter(r=>(!soc||r.soc===soc)).flatMap(r=>r.righe.filter(rg=>rg.contoId===conto.id).map(rg=>({dare:rg.dare,avere:rg.avere})))
+      ];
+      const totDare  = movimenti.reduce((s,m)=>s+(m.dare||0),0);
+      const totAvere = movimenti.reduce((s,m)=>s+(m.avere||0),0);
+      const saldo = classe===4 ? totDare-totAvere : totAvere-totDare;
+      return { ...conto, saldo };
+    }).filter(c=>c.saldo!==0);
+  }
+
+  const costi  = getVociClasse(4);
+  const ricavi = getVociClasse(5);
+  const totCosti  = costi.reduce((s,c)=>s+c.saldo,0);
+  const totRicavi = ricavi.reduce((s,c)=>s+c.saldo,0);
+  const risultato = totRicavi - totCosti;
+
+  function renderSezione(voci, titolo, colore){
+    if(!voci.length) return `<div style="padding:.8rem;color:var(--text3)">Nessuna voce</div>`;
+    return `
+      <div style="font-size:11px;font-weight:700;color:${colore};text-transform:uppercase;padding:.5rem 1rem;background:var(--bg3);">${titolo}</div>
+      ${voci.map(c=>`
+        <div style="display:flex;justify-content:space-between;padding:6px 1rem;border-bottom:.5px solid var(--border);font-size:12px;background:var(--bg2)">
+          <span style="color:var(--text2)">${c.codice} — ${c.nome}</span>
+          <b style="color:${colore}">${fmt(c.saldo)}</b>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:8px 1rem;background:var(--bg3);font-weight:700;font-size:12px">
+        <span>Totale ${titolo}</span>
+        <span style="color:${colore}">${fmt(voci.reduce((s,c)=>s+c.saldo,0))}</span>
+      </div>`;
+  }
+
+  cont.innerHTML = `
+    <div class="metrics" style="margin-bottom:1rem">
+      <div class="metric"><div class="metric-label">Totale Ricavi</div><div class="metric-value avere">${fmt(totRicavi)}</div></div>
+      <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value dare">${fmt(totCosti)}</div></div>
+      <div class="metric"><div class="metric-label">Risultato di Esercizio</div><div class="metric-value ${risultato>=0?'avere':'dare'}">${fmt(risultato)}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="tbl-wrap">
+        ${renderSezione(ricavi,'Ricavi','var(--avere)')}
+      </div>
+      <div class="tbl-wrap">
+        ${renderSezione(costi,'Costi','var(--dare)')}
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:1rem">
+      <div style="display:flex;justify-content:space-between;padding:10px 1rem;font-weight:800;font-size:14px;background:${risultato>=0?'#E8F5E9':'#FFEBEE'}">
+        <span>RISULTATO DI ESERCIZIO ${soc||'GRUPPO'}</span>
+        <span style="color:${risultato>=0?'var(--avere)':'var(--dare)'}">${fmt(risultato)}</span>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SITUAZIONE PATRIMONIALE
+// ══════════════════════════════════════════════════════════════
+function buildSituazionePatrimoniale(){
+  const soc = document.getElementById('sp-soc')?.value||'';
+  const cont = document.getElementById('sp-container');
+  if(!cont) return;
+
+  function getSaldiClasse(classe){
+    const contiClasse = pianoConti.filter(c=>parseInt(c.classe||c.codice?.split('.')[0])===classe);
+    return contiClasse.map(conto=>{
+      const movimenti = [
+        ...bilancioApertura.filter(b=>b.contoId===conto.id&&(!soc||b.soc===soc)),
+        ...registrazioni.filter(r=>(!soc||r.soc===soc)).flatMap(r=>r.righe.filter(rg=>rg.contoId===conto.id).map(rg=>({dare:rg.dare,avere:rg.avere})))
+      ];
+      const totDare  = movimenti.reduce((s,m)=>s+(m.dare||0),0);
+      const totAvere = movimenti.reduce((s,m)=>s+(m.avere||0),0);
+      const saldo = classe===1||classe===3 ? totDare-totAvere : totAvere-totDare;
+      return { ...conto, saldo };
+    }).filter(c=>c.saldo!==0);
+  }
+
+  const attivita  = getSaldiClasse(1);
+  const passivita = getSaldiClasse(2);
+  const patrimonio= getSaldiClasse(3);
+  const totAtt = attivita.reduce((s,c)=>s+c.saldo,0);
+  const totPass= passivita.reduce((s,c)=>s+c.saldo,0);
+  const totPat = patrimonio.reduce((s,c)=>s+c.saldo,0);
+
+  function renderCol(voci, titolo, colore){
+    return `
+      <div class="tbl-wrap">
+        <div style="background:${colore};color:#fff;padding:.6rem 1rem;font-weight:700;font-size:12px">${titolo}</div>
+        ${voci.map(c=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 1rem;border-bottom:.5px solid var(--border);font-size:12px">
+            <span style="color:var(--text2)">${c.codice} — ${c.nome}</span>
+            <b>${fmt(c.saldo)}</b>
+          </div>`).join('')}
+        <div style="display:flex;justify-content:space-between;padding:8px 1rem;background:var(--bg3);font-weight:700;font-size:12px">
+          <span>TOTALE</span><span>${fmt(voci.reduce((s,c)=>s+c.saldo,0))}</span>
+        </div>
+      </div>`;
+  }
+
+  cont.innerHTML = `
+    <div class="metrics" style="margin-bottom:1rem">
+      <div class="metric"><div class="metric-label">Totale Attività</div><div class="metric-value avere">${fmt(totAtt)}</div></div>
+      <div class="metric"><div class="metric-label">Totale Passività</div><div class="metric-value dare">${fmt(totPass)}</div></div>
+      <div class="metric"><div class="metric-label">Patrimonio Netto</div><div class="metric-value ${totPat>=0?'avere':'dare'}">${fmt(totPat)}</div></div>
+      <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value ${Math.abs(totAtt-(totPass+totPat))<0.01?'avere':'dare'}">${Math.abs(totAtt-(totPass+totPat))<0.01?'✅ OK':'⚠️'}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      ${renderCol(attivita,'ATTIVITÀ (Classe 1)','var(--avere)')}
+      <div>
+        ${renderCol(passivita,'PASSIVITÀ (Classe 2)','var(--dare)')}
+        <div style="margin-top:1rem">
+          ${renderCol(patrimonio,'PATRIMONIO NETTO (Classe 3)','var(--blu)')}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SCADENZARIO
+// ══════════════════════════════════════════════════════════════
+function buildScadenzario(){
+  const filtSoc  = document.getElementById('scad-soc')?.value||'';
+  const filtTipo = document.getElementById('scad-tipo')?.value||'';
+  const filtStat = document.getElementById('scad-stato')?.value||'';
+  const oggi = new Date().toISOString().slice(0,10);
+
+  let voci = scadenzario.filter(s=>{
+    if(filtSoc  && s.soc!==filtSoc)   return false;
+    if(filtTipo && s.tipo!==filtTipo) return false;
+    if(filtStat){
+      const stato = s.saldato>=(s.importo-0.01)?'pagato':s.scadenza<oggi?'scaduto':'aperto';
+      if(stato!==filtStat) return false;
+    }
+    return true;
+  }).sort((a,b)=>a.scadenza?.localeCompare(b.scadenza));
+
+  const totCrediti = voci.filter(s=>s.tipo==='credito').reduce((t,s)=>t+s.importo-s.saldato,0);
+  const totDebiti  = voci.filter(s=>s.tipo==='debito') .reduce((t,s)=>t+s.importo-s.saldato,0);
+  const scaduti    = voci.filter(s=>s.scadenza<oggi&&s.saldato<s.importo-0.01).length;
+
+  document.getElementById('scad-metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Crediti aperti</div><div class="metric-value avere">${fmt(totCrediti)}</div></div>
+    <div class="metric"><div class="metric-label">Debiti aperti</div><div class="metric-value dare">${fmt(totDebiti)}</div></div>
+    <div class="metric"><div class="metric-label">Scaduti</div><div class="metric-value ${scaduti>0?'dare':''}">${scaduti}</div></div>
+  `;
+
+  const tbody = document.getElementById('tbody-scadenzario');
+  if(!tbody) return;
+  if(!voci.length){
+    tbody.innerHTML='<tr><td colspan="10" style="padding:1.5rem;text-align:center;color:var(--text3)">Nessuna scadenza</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = voci.map(s=>{
+    const residuo = s.importo-(s.saldato||0);
+    const stato = residuo<=0.01?'pagato':s.scadenza<oggi?'scaduto':'aperto';
+    const statiStyle = {
+      pagato:  'background:#C8E6C9;color:#1A5C38',
+      scaduto: 'background:#FFCDD2;color:#C62828',
+      aperto:  'background:#E3F2FD;color:#0D47A1',
+    };
+    return `<tr>
+      <td style="white-space:nowrap;${stato==='scaduto'?'color:var(--dare);font-weight:700':''}">${fmtData(s.scadenza)}</td>
+      <td><span class="badge-soc badge-${s.soc?.[0]?.toLowerCase()}">${s.soc}</span></td>
+      <td><span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;${s.tipo==='credito'?'background:#E8F5E9;color:var(--avere)':'background:#FFEBEE;color:var(--dare)'}">${s.tipo.toUpperCase()}</span></td>
+      <td>${s.controparte}</td>
+      <td style="font-size:11px;color:var(--text2)">${getNomeContoById(s.contoId)}</td>
+      <td class="num">${fmt(s.importo)}</td>
+      <td class="num avere-cell">${s.saldato?fmt(s.saldato):'—'}</td>
+      <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato.toUpperCase()}</span></td>
+      <td style="font-size:10px;color:var(--text2)">${s.note||'—'}</td>
+      <td style="white-space:nowrap">
+        ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="saldaScadenza('${s.id}')">✓ Salda</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function saldaScadenza(id){
+  const s = scadenzario.find(x=>x.id===id);
+  if(!s) return;
+  const importoStr = prompt(`Importo saldato (residuo: ${fmt(s.importo-(s.saldato||0))}):`);
+  if(!importoStr) return;
+  const importo = parseFloat(importoStr)||0;
+  s.saldato = (s.saldato||0) + importo;
+  buildScadenzario();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+// ══════════════════════════════════════════════════════════════
+// PIANO DEI CONTI
+// ══════════════════════════════════════════════════════════════
+function renderPianoConti(){
+  const search = document.getElementById('pdc-search')?.value?.toLowerCase()||'';
+  const cont = document.getElementById('pdc-container');
+  if(!cont) return;
+
+  const classi = [1,2,3,4,5];
+  const nomiClassi = {1:'ATTIVITÀ',2:'PASSIVITÀ',3:'PATRIMONIO NETTO',4:'COSTI',5:'RICAVI'};
+  const coloriClassi = {1:'var(--avere)',2:'var(--dare)',3:'var(--blu)',4:'#E65100',5:'#1B5E20'};
+
+  cont.innerHTML = classi.map(cl=>{
+    const voci = pianoConti.filter(c=>{
+      const c_cl = parseInt(c.classe||c.codice?.split('.')[0]);
+      if(c_cl!==cl||c.tipo==='classe') return false;
+      if(search && !c.nome.toLowerCase().includes(search) && !c.codice?.includes(search)) return false;
+      return true;
+    }).sort((a,b)=>a.codice?.localeCompare(b.codice));
+
+    if(!voci.length && search) return '';
+
+    return `<div style="margin-bottom:1rem">
+      <div style="background:${coloriClassi[cl]};color:#fff;padding:.6rem 1rem;border-radius:8px 8px 0 0;font-weight:800;font-size:13px">
+        Classe ${cl} — ${nomiClassi[cl]}
+      </div>
+      <div class="tbl-wrap" style="border-radius:0 0 8px 8px">
+        ${voci.map(c=>`
+          <div style="display:flex;align-items:center;padding:6px 1rem;border-bottom:.5px solid var(--border);font-size:12px;padding-left:${(c.tipo==='sottoconto'?3:c.tipo==='conto'?2:1)*1.2}rem">
+            <span style="color:var(--text2);font-size:10px;min-width:60px">${c.codice}</span>
+            <span style="font-weight:${c.tipo==='gruppo'?700:500};flex:1">${c.nome}</span>
+            ${c.soc?`<span class="badge-soc badge-${c.soc[0].toLowerCase()}" style="margin-right:.5rem">${c.soc}</span>`:''}
+            <button class="btn-del" style="padding:1px 6px;font-size:10px" onclick="elimConto('${c.id}')">✕</button>
+          </div>`).join('')}
+        <div style="padding:.5rem 1rem">
+          <button class="btn" style="font-size:10px;padding:3px 10px" onclick="openModalNuovoConto(${cl})">+ Aggiungi conto classe ${cl}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  aggiornaDatalist();
+}
+
+function openModalNuovoConto(classe){
+  document.getElementById('nc-classe').value = classe||'1';
+  document.getElementById('nc-tipo').value = 'conto';
+  document.getElementById('nc-padre').value = '';
+  document.getElementById('nc-codice').value = '';
+  document.getElementById('nc-nome').value = '';
+  document.getElementById('nc-note').value = '';
+  apriModal('modal-nuovo-conto');
+}
+
+function salvaNuovoConto(){
+  const codice = document.getElementById('nc-codice').value.trim();
+  const nome   = document.getElementById('nc-nome').value.trim();
+  const classe = parseInt(document.getElementById('nc-classe').value);
+  const tipo   = document.getElementById('nc-tipo').value;
+  const padre  = document.getElementById('nc-padre').value.trim();
+
+  if(!codice||!nome){ alert('Inserisci codice e nome del conto.'); return; }
+  if(pianoConti.find(c=>c.codice===codice)){ alert(`Il codice ${codice} esiste già.`); return; }
+
+  pianoConti.push({
+    id:codice, codice, nome, classe, tipo,
+    padre: padre || codice.split('.').slice(0,-1).join('.')||null,
+    note: document.getElementById('nc-note').value.trim()
+  });
+  pianoConti.sort((a,b)=>a.codice?.localeCompare(b.codice));
+
+  chiudiModal('modal-nuovo-conto');
+  renderPianoConti();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+function elimConto(id){
+  const usato = [...registrazioni.flatMap(r=>r.righe.map(x=>x.contoId)),
+                 ...bilancioApertura.map(b=>b.contoId)].includes(id);
+  if(usato){ alert('Questo conto ha movimenti registrati — non può essere eliminato.'); return; }
+  if(!confirm('Eliminare questo conto dal piano dei conti?')) return;
+  pianoConti = pianoConti.filter(c=>c.id!==id&&c.padre!==id);
+  renderPianoConti();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+// ══════════════════════════════════════════════════════════════
+// ARCHIVIO 2025/2026
+// ══════════════════════════════════════════════════════════════
+function caricaArchivio(){
+  document.getElementById('archivio-input').click();
+}
+
+function leggiArchivio(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      archivioVecchio = JSON.parse(e.target.result);
+      document.getElementById('archivio-placeholder').style.display='none';
+      document.getElementById('archivio-tabs').style.display='block';
+      switchArchivio('pn', document.querySelector('#archivio-tabs .btn'));
+    }catch(err){ alert('Errore nel file JSON: '+err.message); }
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+function switchArchivio(tab, el){
+  document.querySelectorAll('#archivio-tabs .btn').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const cont = document.getElementById('archivio-content');
+  if(!archivioVecchio){ cont.innerHTML=''; return; }
+
+  if(tab==='pn'){
+    const pn = archivioVecchio.pnData||[];
+    cont.innerHTML=`<div class="tbl-wrap scrollx"><table>
+      <thead><tr><th>Data</th><th>Soc.</th><th>Descrizione</th><th style="text-align:right">Uscita €</th><th style="text-align:right">Entrata €</th><th>Gruppo</th><th>Conto</th></tr></thead>
+      <tbody>${pn.map(r=>`<tr>
+        <td style="white-space:nowrap">${fmtData(r.data||r.dt)}</td>
+        <td><span class="badge-soc badge-${(r.soc||'V')[0].toLowerCase()}">${r.soc||'—'}</span></td>
+        <td>${r.desc||r.descr||'—'}</td>
+        <td class="dare-cell">${r.uscita||r.out?fmt(r.uscita||r.out):'—'}</td>
+        <td class="avere-cell">${r.entrata||r.in?fmt(r.entrata||r.in):'—'}</td>
+        <td style="font-size:11px;color:var(--text2)">${r.gruppo||'—'}</td>
+        <td style="font-size:11px;color:var(--text2)">${r.conto||'—'}</td>
+      </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:1rem">Nessun dato</td></tr>'}
+      </tbody></table></div>`;
+  } else if(tab==='preventivo'){
+    const soci = ['VIRTUS','DINAMO','INVICTA'];
+    const prev = archivioVecchio.prevState||{};
+    cont.innerHTML = soci.map(s=>{
+      const voci = prev[s]||[];
+      return `<div style="margin-bottom:1rem"><div style="font-weight:700;color:${SOC_CLR[s]};margin-bottom:.3rem">${s}</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Gruppo</th><th>Conto</th><th>Sottoconto</th><th>Inizio</th><th style="text-align:right">Mesi</th><th style="text-align:right">Mensile €</th><th style="text-align:right">Totale €</th></tr></thead>
+      <tbody>${voci.map(v=>`<tr><td>${v.gruppo||'—'}</td><td>${v.conto||'—'}</td><td>${v.sub||v.sottoconto||'—'}</td><td>${v.inizio||'—'}</td><td class="num">${v.nmesi||0}</td><td class="num">${fmt(v.mensile||0)}</td><td class="num">${fmt((v.mensile||0)*(v.nmesi||0))}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:.8rem">Nessuna voce</td></tr>'}
+      </tbody></table></div></div>`;
+    }).join('');
+  } else if(tab==='contratti'){
+    const contr = archivioVecchio.contratti||[];
+    cont.innerHTML=`<div class="tbl-wrap scrollx"><table>
+      <thead><tr><th>Soc.</th><th>Sponsor</th><th style="text-align:right">Imponibile €</th><th>IVA %</th><th style="text-align:right">Totale €</th><th>Rate</th></tr></thead>
+      <tbody>${contr.map(c=>`<tr>
+        <td><span class="badge-soc badge-${(c.soc||'V')[0].toLowerCase()}">${c.soc||'—'}</span></td>
+        <td style="font-weight:600">${c.sponsor||c.cliente||'—'}</td>
+        <td class="num">${fmt(c.imponibile||0)}</td>
+        <td>${c.ivaPct||c.iva||0}%</td>
+        <td class="num">${fmt((c.imponibile||0)*(1+(c.ivaPct||c.iva||0)/100))}</td>
+        <td>${c.rate||'—'}</td>
+      </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:1rem">Nessun dato</td></tr>'}
+      </tbody></table></div>`;
+  } else if(tab==='fatture'){
+    const fatt = archivioVecchio.fattureData||[];
+    cont.innerHTML=`<div class="tbl-wrap scrollx"><table>
+      <thead><tr><th>Soc.</th><th>Nr.</th><th>Data</th><th>Cliente</th><th style="text-align:right">Imponibile €</th><th style="text-align:right">IVA €</th><th style="text-align:right">Totale €</th><th style="text-align:right">Incassato €</th><th>Stato</th></tr></thead>
+      <tbody>${fatt.map(f=>{
+        const tot=(f.imponibile||0)*(1+(f.ivaPct||0)/100);
+        const inc=f.incassato||0;
+        const stato=inc>=tot-0.01?'SALDATA':inc>0?'PARZIALE':'APERTA';
+        const statiClr={SALDATA:'var(--avere)',PARZIALE:'var(--amber)',APERTA:'var(--text2)'};
+        return`<tr>
+          <td><span class="badge-soc badge-${(f.soc||'V')[0].toLowerCase()}">${f.soc||'—'}</span></td>
+          <td style="font-size:11px">${f.nr||'—'}</td>
+          <td style="white-space:nowrap">${fmtData(f.data)}</td>
+          <td>${f.cliente||f.sponsor||'—'}</td>
+          <td class="num">${fmt(f.imponibile||0)}</td>
+          <td class="num">${fmt((f.imponibile||0)*(f.ivaPct||0)/100)}</td>
+          <td class="num">${fmt(tot)}</td>
+          <td class="avere-cell">${fmt(inc)}</td>
+          <td style="font-weight:700;color:${statiClr[stato]}">${stato}</td>
+        </tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:1rem">Nessun dato</td></tr>'}
+      </tbody></table></div>`;
+  } else if(tab==='insolute'){
+    const ins = archivioVecchio.insoluteData||[];
+    cont.innerHTML=`<div class="tbl-wrap scrollx"><table>
+      <thead><tr><th>Soc.</th><th>Cliente</th><th style="text-align:right">Totale IVA incl. €</th><th style="text-align:right">IVA €</th><th style="text-align:right">Ns. Credito €</th><th style="text-align:right">Deb. v/Cliente €</th></tr></thead>
+      <tbody>${ins.map(i=>`<tr>
+        <td><span class="badge-soc badge-${(i.soc||'V')[0].toLowerCase()}">${i.soc||'—'}</span></td>
+        <td style="font-weight:600">${i.cliente||'—'}</td>
+        <td class="num">${fmt(i.totaleIVA||0)}</td>
+        <td class="dare-cell">${fmt(i.iva||0)}</td>
+        <td class="avere-cell">${fmt(i.nsCredito||0)}</td>
+        <td class="dare-cell">${fmt(i.debCliente||0)}</td>
+      </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:1rem">Nessun dato</td></tr>'}
+      </tbody></table></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BACKUP / RIPRISTINO
+// ══════════════════════════════════════════════════════════════
+function esportaBackup(){
+  const backup = {
+    versione:'2.0-contabilita',
+    data: new Date().toISOString(),
+    pianoConti, registrazioni, bilancioApertura, scadenzario
+  };
+  const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `backup_contabilita_virtus_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importaBackup(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  if(!confirm(`Ripristinare i dati da "${file.name}"? I dati attuali verranno sovrascritti.`)) return;
+  const reader = new FileReader();
+  reader.onload = async e=>{
+    try{
+      const b = JSON.parse(e.target.result);
+      if(b.pianoConti)    pianoConti     = b.pianoConti;
+      if(b.registrazioni) registrazioni  = b.registrazioni;
+      if(b.bilancioApertura) bilancioApertura = b.bilancioApertura;
+      if(b.scadenzario)   scadenzario    = b.scadenzario;
+      await window.salvaDatiFirestore();
+      buildHome();
+      alert('✅ Ripristino completato.');
+    }catch(err){ alert('Errore: '+err.message); }
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+// ══════════════════════════════════════════════════════════════
+// NAVIGAZIONE
+// ══════════════════════════════════════════════════════════════
+function filtraGruppiConto(){ /* usato dal modal nuovo conto */ }
+
+// Popola filtro mesi prima nota
+function popolaFiltroMesi(){
+  const sel = document.getElementById('pn-filter-mese');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">Tutti i mesi</option>' +
+    MESI.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// DOM READY
+// ══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('pn-data').valueAsDate = new Date();
+  popolaFiltroMesi();
+  aggiornaDatalist();
+  // Loghi sidebar (placeholder — da sostituire con quelli reali)
+  const sl = document.getElementById('sidebar-loghi');
+  if(sl) sl.innerHTML = SOC.map(s=>`<div style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${s[0]}</div>`).join('');
+  const ll = document.getElementById('login-loghi');
+  if(ll) ll.innerHTML = SOC.map(s=>`<div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#0D3B6E;border:2px solid #EEE">${s[0]}</div>`).join('');
+});
+
+</script>
+<script>
+// ══════════════════════════════════════════════════════════════
+// FIREBASE — sostituire con il firebaseConfig del nuovo progetto
+// ══════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyD3HawfvnSUpgLlCZ5zHsH1BW5y9W3XS24",
+  authDomain: "gestionale-virtus-contabilita.firebaseapp.com",
+  projectId: "gestionale-virtus-contabilita",
+  storageBucket: "gestionale-virtus-contabilita.firebasestorage.app",
+  messagingSenderId: "955006726844",
+  appId: "1:955006726844:web:de32ecaa4bf1ea3a6356b9"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+const DATI_REF = () => db.collection('contabilita').doc('dati');
+const ADMIN_UID  = 'rCC7FsynxFV6SXrUlrKAjGqIq782';
+const ADMIN_NOME = 'Nico de Robertis';
+
+// ── SALVATAGGIO ──
+window.salvaDatiFirestore = async function(){
+  try{
+    await DATI_REF().set({
+      pianoConti, registrazioni, bilancioApertura, scadenzario,
+      aggiornatoIl: new Date().toISOString(),
+      aggiornatoDa: window._currentUser?.nome||'sistema'
+    });
+  }catch(e){ console.error('Errore salvataggio:',e.message); }
+};
+
+window.salvaEAggiorna = async function(){
+  await window.salvaDatiFirestore();
+  mostraSalvataggio();
+};
+
+function mostraSalvataggio(){
+  let el = document.getElementById('sync-indicator');
+  if(!el){
+    el = document.createElement('div');
+    el.id='sync-indicator';
+    el.style.cssText='position:fixed;bottom:16px;right:16px;background:#1A5C38;color:#fff;font-size:11px;font-weight:700;padding:6px 14px;border-radius:20px;z-index:9000;transition:opacity .4s;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+    document.body.appendChild(el);
+  }
+  el.textContent='✅ Salvato su cloud';
+  el.style.opacity='1';
+  setTimeout(()=>{ el.style.opacity='0'; },2500);
+}
+
+// ── CARICAMENTO ──
+window.caricaDatiFirestore = async function(){
+  try{
+    const snap = await DATI_REF().get();
+    if(snap.exists){
+      const d = snap.data();
+      if(d.pianoConti)       pianoConti       = d.pianoConti;
+      if(d.registrazioni)    registrazioni    = d.registrazioni;
+      if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
+      if(d.scadenzario)      scadenzario      = d.scadenzario;
+      console.log('✅ Dati caricati da Firestore');
+    } else {
+      await window.salvaDatiFirestore();
+      console.log('✅ Dati iniziali salvati');
+    }
+  }catch(e){ console.error('Errore caricamento:',e.message); }
+};
+
+// ── LISTENER TEMPO REALE ──
+let _listenerUnsubscribe = null;
+window.avviaListenerDati = function(){
+  let primo = true;
+  const unsub = DATI_REF().onSnapshot(snap=>{
+    if(!snap.exists||primo){ primo=false; return; }
+    const d = snap.data();
+    if(d.pianoConti)       pianoConti       = d.pianoConti;
+    if(d.registrazioni)    registrazioni    = d.registrazioni;
+    if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
+    if(d.scadenzario)      scadenzario      = d.scadenzario;
+    buildHome();
+    aggiornaDatalist();
+  }, err=>console.error('Listener:',err.message));
+  return unsub;
+};
+
+// ── LOGIN ──
+window.doLogin = async function(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const err   = document.getElementById('login-err');
+  err.textContent='';
+  if(!email||!pass){ err.textContent='Inserisci email e password.'; return; }
+  try{
+    await auth.signInWithEmailAndPassword(email,pass);
+  }catch(e){
+    err.textContent = (e.code==='auth/invalid-credential'||e.code==='auth/wrong-password')
+      ? 'Credenziali non valide.' : 'Errore: '+e.message;
+  }
+};
+
+window.doLogout = async function(){
+  if(!confirm('Vuoi uscire?')) return;
+  if(_listenerUnsubscribe){ _listenerUnsubscribe(); _listenerUnsubscribe=null; }
+  await auth.signOut();
+};
+
+// ── AUTH STATE ──
+auth.onAuthStateChanged(async function(user){
+  if(user){
+    try{
+      // Inizializza admin se primo accesso
+      const ref = db.collection('utenti').doc(user.uid);
+      const snap = await ref.get();
+      if(!snap.exists){
+        await ref.set({ nome:user.displayName||user.email.split('@')[0], email:user.email, ruolo:'admin', stato:'approvato', creatoIl:new Date().toISOString() });
+      }
+      const profilo = (await ref.get()).data();
+      if(profilo.stato!=='approvato'){
+        document.getElementById('login-err').textContent='Account non ancora approvato.';
+        await auth.signOut(); return;
+      }
+      window._currentUser = { uid:user.uid, email:user.email, ...profilo };
+      window.currentRuolo = profilo.ruolo;
+      document.getElementById('login-overlay').style.display='none';
+      document.getElementById('user-bar-name').textContent = profilo.nome||user.email;
+      document.getElementById('ruolo-badge').textContent = profilo.ruolo?.toUpperCase();
+      const lb = document.getElementById('logout-btn');
+      if(lb) lb.style.display='block';
+      // Carica dati
+      await window.caricaDatiFirestore();
+      if(!_listenerUnsubscribe) _listenerUnsubscribe = window.avviaListenerDati();
+      // Render iniziale
+      renderPianoConti();
+      aggiornaDatalist();
+      buildHome();
+      showPage('home', document.getElementById('nav-home'));
+    }catch(e){
+      document.getElementById('login-err').textContent='Errore: '+e.message;
+    }
+  } else {
+    document.getElementById('login-overlay').style.display='flex';
+    const lb = document.getElementById('logout-btn');
+    if(lb) lb.style.display='none';
+  }
+});
+
+// ── GESTIONE UTENTI ──
+async function caricaUtenti(){
+  const cont = document.getElementById('utenti-container');
+  if(!cont) return;
+  cont.innerHTML='<div style="padding:1rem;color:var(--text2)">Caricamento...</div>';
+  const snap = await db.collection('utenti').get();
+  const utenti = snap.docs.map(d=>({uid:d.id,...d.data()}));
+  cont.innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Stato</th><th>Azioni</th></tr></thead>
+    <tbody>${utenti.map(u=>`<tr>
+      <td><b>${u.nome||''}</b></td>
+      <td style="font-size:11px">${u.email||''}</td>
+      <td><select class="form-input" style="font-size:11px;padding:3px 6px" onchange="cambiaRuoloUtente('${u.uid}',this.value)">
+        ${['admin','editor','visitor'].map(r=>`<option ${u.ruolo===r?'selected':''}>${r}</option>`).join('')}
+      </select></td>
+      <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${u.stato==='approvato'?'#C6EFCE':'#FFF2CC'};color:${u.stato==='approvato'?'#1A5C38':'#7B3F00'}">${u.stato==='approvato'?'Approvato':'In attesa'}</span></td>
+      <td>${u.stato!=='approvato'?`<button class="btn btn-dark" style="font-size:10px;padding:3px 10px" onclick="approvaUtente('${u.uid}')">✅ Approva</button>`:''}</td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+async function approvaUtente(uid){
+  await db.collection('utenti').doc(uid).set({stato:'approvato'},{merge:true});
+  caricaUtenti();
+}
+
+async function cambiaRuoloUtente(uid,ruolo){
+  await db.collection('utenti').doc(uid).set({ruolo},{merge:true});
+}
+</script>
+</body>
+</html>
