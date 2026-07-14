@@ -1391,6 +1391,7 @@ function renderPianoConti(){
             <span style="font-weight:${c.tipo==='gruppo'?700:500};flex:1">${c.nome}</span>
             ${c.soc?`<span class="badge-soc badge-${c.soc[0].toLowerCase()}" style="margin-right:.5rem">${c.soc}</span>`:''}
             <button class="btn-del" style="padding:1px 6px;font-size:10px" onclick="elimConto('${c.id}')">✕</button>
+            <button class="btn" style="padding:1px 6px;font-size:10px;margin-right:3px" onclick="editConto('${c.id}')">✏</button>
           </div>`).join('')}
         <div style="padding:.5rem 1rem">
           <button class="btn" style="font-size:10px;padding:3px 10px" onclick="openModalNuovoConto(${cl})">+ Aggiungi conto classe ${cl}</button>
@@ -1402,6 +1403,20 @@ function renderPianoConti(){
   aggiornaDatalist();
 }
 
+function editConto(id){
+  const c = pianoConti.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('nc-classe').value = c.classe||c.codice?.split('.')[0]||'1';
+  document.getElementById('nc-tipo').value   = c.tipo||'conto';
+  document.getElementById('nc-padre').value  = c.padre ? (pianoConti.find(x=>x.id===c.padre) ? `${pianoConti.find(x=>x.id===c.padre).codice} — ${pianoConti.find(x=>x.id===c.padre).nome}` : c.padre) : '';
+  document.getElementById('nc-codice').value = c.codice||'';
+  document.getElementById('nc-nome').value   = c.nome||'';
+  document.getElementById('nc-note').value   = c.note||'';
+  document.getElementById('modal-nuovo-conto').dataset.editId = id;
+  document.querySelector('#modal-nuovo-conto .modal-title').textContent = '✏ Modifica Conto';
+  apriModal('modal-nuovo-conto');
+}
+
 function openModalNuovoConto(classe){
   document.getElementById('nc-classe').value = classe||'1';
   document.getElementById('nc-tipo').value = 'conto';
@@ -1409,26 +1424,46 @@ function openModalNuovoConto(classe){
   document.getElementById('nc-codice').value = '';
   document.getElementById('nc-nome').value = '';
   document.getElementById('nc-note').value = '';
+  document.getElementById('modal-nuovo-conto').dataset.editId = '';
+  document.querySelector('#modal-nuovo-conto .modal-title').textContent = '🗃 Nuovo Conto';
   apriModal('modal-nuovo-conto');
 }
 
 function salvaNuovoConto(){
-  const codice = document.getElementById('nc-codice').value.trim();
-  const nome   = document.getElementById('nc-nome').value.trim();
-  const classe = parseInt(document.getElementById('nc-classe').value);
-  const tipo   = document.getElementById('nc-tipo').value;
-  const padre  = document.getElementById('nc-padre').value.trim();
+  const codice  = document.getElementById('nc-codice').value.trim();
+  const nome    = document.getElementById('nc-nome').value.trim();
+  const classe  = parseInt(document.getElementById('nc-classe').value);
+  const tipo    = document.getElementById('nc-tipo').value;
+  const padreRaw= document.getElementById('nc-padre').value.trim();
+  const note    = document.getElementById('nc-note').value.trim();
+  const editId  = document.getElementById('modal-nuovo-conto').dataset.editId;
 
   if(!codice||!nome){ alert('Inserisci codice e nome del conto.'); return; }
-  if(pianoConti.find(c=>c.codice===codice)){ alert(`Il codice ${codice} esiste già.`); return; }
 
-  pianoConti.push({
-    id:codice, codice, nome, classe, tipo,
-    padre: padre || codice.split('.').slice(0,-1).join('.')||null,
-    note: document.getElementById('nc-note').value.trim()
-  });
+  // Ricava l'id del padre dal testo "codice — nome" oppure usa il codice diretto
+  const padreObj = pianoConti.find(c=>`${c.codice} — ${c.nome}`===padreRaw||c.codice===padreRaw);
+  const padreId  = padreObj ? padreObj.id : (padreRaw || codice.split('.').slice(0,-1).join('.')||null);
+
+  if(editId){
+    // MODIFICA
+    const idx = pianoConti.findIndex(c=>c.id===editId);
+    if(idx===-1){ alert('Conto non trovato.'); return; }
+    const vecchioCodice = pianoConti[idx].codice;
+    // Aggiorna il conto
+    pianoConti[idx] = { ...pianoConti[idx], codice, nome, classe, tipo, padre:padreId, note, id:codice };
+    // Se il codice è cambiato, aggiorna i riferimenti figli e nelle registrazioni
+    if(vecchioCodice !== codice){
+      pianoConti.forEach(c=>{ if(c.padre===vecchioCodice) c.padre=codice; });
+      registrazioni.forEach(r=>r.righe.forEach(rg=>{ if(rg.contoId===vecchioCodice) rg.contoId=codice; }));
+      bilancioApertura.forEach(b=>{ if(b.contoId===vecchioCodice) b.contoId=codice; });
+    }
+  } else {
+    // NUOVO
+    if(pianoConti.find(c=>c.codice===codice)){ alert(`Il codice ${codice} esiste già.`); return; }
+    pianoConti.push({ id:codice, codice, nome, classe, tipo, padre:padreId, note });
+  }
+
   pianoConti.sort((a,b)=>a.codice?.localeCompare(b.codice));
-
   chiudiModal('modal-nuovo-conto');
   renderPianoConti();
   window.salvaEAggiorna && window.salvaEAggiorna();
