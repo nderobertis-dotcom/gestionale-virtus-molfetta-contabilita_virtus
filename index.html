@@ -758,8 +758,8 @@ function buildHome(){
 
   document.getElementById('home-metrics').innerHTML = `
     <div class="metric"><div class="metric-label">Registrazioni</div><div class="metric-value">${nReg}</div></div>
-    <div class="metric"><div class="metric-label">Totale Ricavi</div><div class="metric-value avere">${fmt(ricavi)}</div></div>
-    <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value dare">${fmt(costi)}</div></div>
+    <div class="metric"><div class="metric-label">Totale Ricavi</div><div class="metric-value" style="color:var(--ricavo)">${fmt(ricavi)}</div></div>
+    <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value" style="color:var(--costo)">${fmt(costi)}</div></div>
     <div class="metric"><div class="metric-label">Risultato</div><div class="metric-value ${risultato>=0?'avere':'dare'}">${fmt(risultato)}</div></div>
     <div class="metric"><div class="metric-label">Equilibrio PD</div><div class="metric-value ${Math.abs(totDare-totAvere)<0.01?'avere':'dare'}">${Math.abs(totDare-totAvere)<0.01?'✅ OK':'⚠️ '+fmt(Math.abs(totDare-totAvere))}</div></div>
   `;
@@ -1046,8 +1046,8 @@ function renderBilancioApertura(){
   const equilibrio = Math.abs(totDare-totAvere) < 0.01;
 
   document.getElementById('ba-metrics').innerHTML=`
-    <div class="metric"><div class="metric-label">Totale Dare</div><div class="metric-value dare">${fmt(totDare)}</div></div>
-    <div class="metric"><div class="metric-label">Totale Avere</div><div class="metric-value avere">${fmt(totAvere)}</div></div>
+    <div class="metric"><div class="metric-label">Totale Dare</div><div class="metric-value" style="color:var(--dare)">${fmt(totDare)}</div></div>
+    <div class="metric"><div class="metric-label">Totale Avere</div><div class="metric-value" style="color:var(--avere)">${fmt(totAvere)}</div></div>
     <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value ${equilibrio?'avere':'dare'}">${equilibrio?'✅ OK':'⚠️ '+fmt(Math.abs(totDare-totAvere))}</div></div>
   `;
 
@@ -1205,8 +1205,8 @@ function buildContoEconomico(){
 
   cont.innerHTML = `
     <div class="metrics" style="margin-bottom:1rem">
-      <div class="metric"><div class="metric-label">Totale Ricavi</div><div class="metric-value avere">${fmt(totRicavi)}</div></div>
-      <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value dare">${fmt(totCosti)}</div></div>
+      <div class="metric"><div class="metric-label">Totale Ricavi</div><div class="metric-value" style="color:var(--ricavo)">${fmt(totRicavi)}</div></div>
+      <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value" style="color:var(--costo)">${fmt(totCosti)}</div></div>
       <div class="metric"><div class="metric-label">Risultato di Esercizio</div><div class="metric-value ${risultato>=0?'avere':'dare'}">${fmt(risultato)}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
@@ -1271,10 +1271,10 @@ function buildSituazionePatrimoniale(){
 
   cont.innerHTML = `
     <div class="metrics" style="margin-bottom:1rem">
-      <div class="metric"><div class="metric-label">Totale Attività</div><div class="metric-value avere">${fmt(totAtt)}</div></div>
-      <div class="metric"><div class="metric-label">Totale Passività</div><div class="metric-value dare">${fmt(totPass)}</div></div>
-      <div class="metric"><div class="metric-label">Patrimonio Netto</div><div class="metric-value ${totPat>=0?'avere':'dare'}">${fmt(totPat)}</div></div>
-      <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value ${Math.abs(totAtt-(totPass+totPat))<0.01?'avere':'dare'}">${Math.abs(totAtt-(totPass+totPat))<0.01?'✅ OK':'⚠️'}</div></div>
+      <div class="metric"><div class="metric-label">Totale Attività</div><div class="metric-value" style="color:var(--ricavo)">${fmt(totAtt)}</div></div>
+      <div class="metric"><div class="metric-label">Totale Passività</div><div class="metric-value" style="color:var(--costo)">${fmt(totPass)}</div></div>
+      <div class="metric"><div class="metric-label">Patrimonio Netto</div><div class="metric-value" style="color:${totPat>=0?'var(--ricavo)':'var(--costo)'}">${fmt(totPat)}</div></div>
+      <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value" style="color:${Math.abs(totAtt-(totPass+totPat))<0.01?'var(--ricavo)':'var(--costo)'}">${Math.abs(totAtt-(totPass+totPat))<0.01?'✅ OK':'⚠️'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       ${renderCol(attivita,'ATTIVITÀ (Classe 1)','var(--ricavo)')}
@@ -1311,8 +1311,8 @@ function buildScadenzario(){
   const scaduti    = voci.filter(s=>s.scadenza<oggi&&s.saldato<s.importo-0.01).length;
 
   document.getElementById('scad-metrics').innerHTML=`
-    <div class="metric"><div class="metric-label">Crediti aperti</div><div class="metric-value avere">${fmt(totCrediti)}</div></div>
-    <div class="metric"><div class="metric-label">Debiti aperti</div><div class="metric-value dare">${fmt(totDebiti)}</div></div>
+    <div class="metric"><div class="metric-label">Crediti aperti</div><div class="metric-value" style="color:var(--ricavo)">${fmt(totCrediti)}</div></div>
+    <div class="metric"><div class="metric-label">Debiti aperti</div><div class="metric-value" style="color:var(--costo)">${fmt(totDebiti)}</div></div>
     <div class="metric"><div class="metric-label">Scaduti</div><div class="metric-value ${scaduti>0?'dare':''}">${scaduti}</div></div>
   `;
 
