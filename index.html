@@ -524,6 +524,12 @@ tr:hover td{background:var(--bg)}
   <div class="modal">
     <div class="modal-title">⚖️ Saldo Iniziale</div>
     <div class="form-row">
+      <label class="form-label">Società</label>
+      <select class="form-input" id="ba-soc-modal">
+        <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+      </select>
+    </div>
+    <div class="form-row">
       <label class="form-label">Conto</label>
       <input type="text" class="form-input" id="ba-conto" list="pdc-datalist" placeholder="Cerca conto...">
     </div>
@@ -1001,6 +1007,8 @@ function delRegistrazione(id){
 // ══════════════════════════════════════════════════════════════
 function openModalApertura(id){
   const b = id ? bilancioApertura.find(x=>x.id===id) : null;
+  const socCorrente = document.getElementById('ba-soc')?.value||'VIRTUS';
+  document.getElementById('ba-soc-modal').value = b ? b.soc : socCorrente;
   document.getElementById('ba-conto').value = b ? getNomeContoById(b.contoId) : '';
   document.getElementById('ba-dare').value  = b ? b.dare||'' : '';
   document.getElementById('ba-avere').value = b ? b.avere||'' : '';
@@ -1018,7 +1026,7 @@ function salvaApertura(){
   if(!conto){ alert('Seleziona un conto valido dal Piano dei Conti.'); return; }
   if(!dare && !avere){ alert('Inserisci almeno un importo in Dare o Avere.'); return; }
 
-  const soc = document.getElementById('ba-soc')?.value||'VIRTUS';
+  const soc = document.getElementById('ba-soc-modal')?.value||'VIRTUS';
   const editId = document.getElementById('modal-apertura').dataset.editId;
   const rec = {
     id: editId||genId(), soc, contoId:conto.id,
