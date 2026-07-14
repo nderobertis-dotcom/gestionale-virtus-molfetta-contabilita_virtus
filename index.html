@@ -18,7 +18,8 @@
   --radius:8px;
   --blu:#0D3B6E;--verde:#1A5C38;--marrone:#6B3A00;
   --rosso:#C0392B;--amber:#E67E22;
-  --dare:#E53935;--avere:#1A5C38;
+  --dare:#1A5C38;--avere:#E53935;
+  --costo:#E53935;--ricavo:#1A5C38;--positivo:#1A5C38;--negativo:#E53935;
 }
 
 /* ── LAYOUT ── */
@@ -771,13 +772,13 @@ function buildHome(){
       <div style="background:${SOC_CLR[s]};padding:.7rem 1rem;color:#fff;font-weight:800;font-size:13px">${s}</div>
       <div style="padding:.8rem 1rem">
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:.3rem">
-          <span style="color:var(--text2)">Ricavi</span><b style="color:var(--avere)">${fmt(ric)}</b>
+          <span style="color:var(--text2)">Ricavi</span><b style="color:var(--ricavo)">${fmt(ric)}</b>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:.3rem">
-          <span style="color:var(--text2)">Costi</span><b style="color:var(--dare)">${fmt(cos)}</b>
+          <span style="color:var(--text2)">Costi</span><b style="color:var(--costo)">${fmt(cos)}</b>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:11px;border-top:.5px solid var(--border);padding-top:.3rem;margin-top:.3rem">
-          <span style="color:var(--text2)">Risultato</span><b style="color:${ris>=0?'var(--avere)':'var(--dare)'}">${fmt(ris)}</b>
+          <span style="color:var(--text2)">Risultato</span><b style="color:${ris>=0?'var(--ricavo)':'var(--costo)'}">${fmt(ris)}</b>
         </div>
       </div>
     </div>`;
@@ -1210,16 +1211,16 @@ function buildContoEconomico(){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       <div class="tbl-wrap">
-        ${renderSezione(ricavi,'Ricavi','var(--avere)')}
+        ${renderSezione(ricavi,'Ricavi','var(--ricavo)')}
       </div>
       <div class="tbl-wrap">
-        ${renderSezione(costi,'Costi','var(--dare)')}
+        ${renderSezione(costi,'Costi','var(--costo)')}
       </div>
     </div>
     <div class="tbl-wrap" style="margin-top:1rem">
       <div style="display:flex;justify-content:space-between;padding:10px 1rem;font-weight:800;font-size:14px;background:${risultato>=0?'#E8F5E9':'#FFEBEE'}">
         <span>RISULTATO DI ESERCIZIO ${soc||'GRUPPO'}</span>
-        <span style="color:${risultato>=0?'var(--avere)':'var(--dare)'}">${fmt(risultato)}</span>
+        <span style="color:${risultato>=0?'var(--ricavo)':'var(--costo)'}">${fmt(risultato)}</span>
       </div>
     </div>`;
 }
@@ -1276,9 +1277,9 @@ function buildSituazionePatrimoniale(){
       <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value ${Math.abs(totAtt-(totPass+totPat))<0.01?'avere':'dare'}">${Math.abs(totAtt-(totPass+totPat))<0.01?'✅ OK':'⚠️'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      ${renderCol(attivita,'ATTIVITÀ (Classe 1)','var(--avere)')}
+      ${renderCol(attivita,'ATTIVITÀ (Classe 1)','var(--ricavo)')}
       <div>
-        ${renderCol(passivita,'PASSIVITÀ (Classe 2)','var(--dare)')}
+        ${renderCol(passivita,'PASSIVITÀ (Classe 2)','var(--costo)')}
         <div style="margin-top:1rem">
           ${renderCol(patrimonio,'PATRIMONIO NETTO (Classe 3)','var(--blu)')}
         </div>
