@@ -1803,15 +1803,18 @@ function buildScadenzario(){
     return;
   }
 
-  tbody.innerHTML = voci.map(s=>{
+  // Raggruppa per pianoId — le rate dello stesso piano mostrano una riga collassata
+  const piani_ids = [...new Set(voci.filter(s=>s.pianoId).map(s=>s.pianoId))];
+  const voci_singole = voci.filter(s=>!s.pianoId);
+
+  // Costruisce riga singola (senza piano)
+  function rigaSingola(s){
     const residuo = s.importo-(s.saldato||0);
     const meseCorr = oggi.slice(0,7);
     const stato = residuo<=0.01?'pagato':s.scadenza<oggi?'scaduto':s.scadenza?.slice(0,7)===meseCorr?'corrente':'aperto';
     const statiStyle = {
-      pagato:   'background:#C8E6C9;color:#1A5C38',
-      scaduto:  'background:#FFCDD2;color:#C62828',
-      corrente: 'background:#FFF9C4;color:#F57F17',
-      aperto:   'background:#BBDEFB;color:#1565C0',
+      pagato:'background:#C8E6C9;color:#1A5C38',scaduto:'background:#FFCDD2;color:#C62828',
+      corrente:'background:#FFF9C4;color:#F57F17',aperto:'background:#BBDEFB;color:#1565C0',
     };
     return `<tr>
       <td style="white-space:nowrap;${stato==='scaduto'?'color:var(--dare);font-weight:700':''}">${fmtData(s.scadenza)}</td>
@@ -1820,15 +1823,104 @@ function buildScadenzario(){
       <td>${s.controparte}</td>
       <td style="font-size:11px;color:var(--text2)">${getNomeContoById(s.contoId)}</td>
       <td class="num">${fmt(s.importo)}</td>
-      <td class="num avere-cell">${s.saldato?fmt(s.saldato):'—'}</td>
+      <td class="num" style="color:var(--ricavo)">${s.saldato?fmt(s.saldato):'—'}</td>
       <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato==='aperto'?'FUTURO':stato==='corrente'?'QUESTO MESE':stato.toUpperCase()}</span></td>
       <td style="font-size:10px;color:var(--text2)">${s.note||'—'}</td>
       <td style="white-space:nowrap">
         ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
-        ${s.pianoId?`<button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="apriModalRateazione('${s.regId||''}','${s.contoId}')">📅</button>`:''}
       </td>
     </tr>`;
-  }).join('');
+  }
+
+  // Costruisce riga raggruppata per piano (collassata)
+  function rigaPiano(pianoId){
+    const rate = voci.filter(s=>s.pianoId===pianoId);
+    if(!rate.length) return '';
+    const prima = rate[0];
+    const totImporto = rate.reduce((t,s)=>t+s.importo,0);
+    const totResiduo = rate.reduce((t,s)=>t+(s.importo-(s.saldato||0)),0);
+    const totSaldato = rate.reduce((t,s)=>t+(s.saldato||0),0);
+    const nPagate    = rate.filter(s=>(s.importo-(s.saldato||0))<=0.01).length;
+    const nScadute   = rate.filter(s=>s.scadenza<oggi&&(s.importo-(s.saldato||0))>0.01).length;
+    const hasCorr    = rate.some(s=>s.scadenza?.slice(0,7)===oggi.slice(0,7)&&(s.importo-(s.saldato||0))>0.01);
+    const stato = totResiduo<=0.01?'pagato':nScadute>0?'scaduto':hasCorr?'corrente':'aperto';
+    const statiStyle = {
+      pagato:'background:#C8E6C9;color:#1A5C38',scaduto:'background:#FFCDD2;color:#C62828',
+      corrente:'background:#FFF9C4;color:#F57F17',aperto:'background:#BBDEFB;color:#1565C0',
+    };
+    const aperto = document.getElementById('scad-piano-open-'+pianoId);
+    const isOpen = aperto?.dataset.open==='1';
+
+    // Riga sommario piano
+    let html = `<tr style="cursor:pointer" onclick="togglePianoScad('${pianoId}')">
+      <td style="white-space:nowrap;font-size:11px;color:var(--text2)">${rate.length} rate · ${fmtData(rate[0]?.scadenza)} → ${fmtData(rate[rate.length-1]?.scadenza)}</td>
+      <td><span class="badge-soc badge-${prima.soc?.[0]?.toLowerCase()}">${prima.soc}</span></td>
+      <td><span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;${prima.tipo==='credito'?'background:#E8F5E9;color:var(--avere)':'background:#FFEBEE;color:var(--dare)'}">${prima.tipo.toUpperCase()}</span></td>
+      <td>${prima.controparte}</td>
+      <td style="font-size:11px;color:var(--text2)">${getNomeContoById(prima.contoId)}</td>
+      <td class="num" style="font-weight:700">${fmt(totImporto)}</td>
+      <td class="num" style="color:var(--ricavo)">${totSaldato?fmt(totSaldato):'—'}</td>
+      <td>
+        <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato==='aperto'?'FUTURO':stato==='corrente'?'QUESTO MESE':stato.toUpperCase()}</span>
+        <span style="font-size:10px;color:var(--text2);margin-left:4px">${nPagate}/${rate.length} pagate</span>
+      </td>
+      <td style="font-size:11px;font-weight:700;color:var(--costo)">Residuo: ${fmt(totResiduo)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();togglePianoScad('${pianoId}')">
+          📅 ${isOpen?'▲':'▼'}
+        </button>
+        <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="event.stopPropagation();apriModalRateazione('${prima.regId||''}','${prima.contoId}')">✏</button>
+      </td>
+    </tr>
+    <tr id="scad-piano-open-${pianoId}" data-open="${isOpen?'1':'0'}" style="display:${isOpen?'':'none'}">
+      <td colspan="10" style="padding:0;background:var(--bg3)">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:#1A1A2E;color:#fff">
+            <th style="padding:5px 10px">#</th>
+            <th style="padding:5px 10px">Scadenza</th>
+            <th style="padding:5px 10px;text-align:right">Importo</th>
+            <th style="padding:5px 10px;text-align:right">Saldato</th>
+            <th style="padding:5px 10px;text-align:right">Residuo</th>
+            <th style="padding:5px 10px">Stato</th>
+            <th style="padding:5px 10px"></th>
+          </tr></thead>
+          <tbody>`;
+
+    rate.forEach((s,i)=>{
+      const res = s.importo-(s.saldato||0);
+      const st  = res<=0.01?'pagato':s.scadenza<oggi?'scaduto':s.scadenza?.slice(0,7)===oggi.slice(0,7)?'corrente':'aperto';
+      const stClr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',aperto:'#1565C0'};
+      const stLabel = {pagato:'✅ PAGATA'+(s.dataPagamento?' il '+fmtData(s.dataPagamento):''),scaduto:'⚠️ SCADUTA',corrente:'🔔 QUESTO MESE',aperto:'🔵 FUTURA'};
+      html += `<tr style="border-bottom:.5px solid var(--border)">
+        <td style="padding:5px 10px;color:var(--text2)">${i+1}</td>
+        <td style="padding:5px 10px">${fmtData(s.scadenza)}</td>
+        <td style="padding:5px 10px;text-align:right">${fmt(s.importo)}</td>
+        <td style="padding:5px 10px;text-align:right;color:var(--ricavo)">${s.saldato?fmt(s.saldato):'—'}</td>
+        <td style="padding:5px 10px;text-align:right;font-weight:700;color:var(--costo)">${res>0.01?fmt(res):'—'}</td>
+        <td style="padding:5px 10px;font-weight:700;color:${stClr[st]}">${stLabel[st]}</td>
+        <td style="padding:5px 10px">
+          ${st!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
+        </td>
+      </tr>`;
+    });
+
+    html += `</tbody></table></td></tr>`;
+    return html;
+  }
+
+  tbody.innerHTML =
+    piani_ids.map(pid=>rigaPiano(pid)).join('') +
+    voci_singole.map(s=>rigaSingola(s)).join('');
+}
+
+function togglePianoScad(pianoId){
+  const row = document.getElementById('scad-piano-open-'+pianoId);
+  if(!row) return;
+  const isOpen = row.dataset.open==='1';
+  row.dataset.open = isOpen?'0':'1';
+  row.style.display = isOpen?'none':'';
+  // Aggiorna l'icona nel pulsante della riga sopra
+  buildScadenzario();
 }
 
 function saldaScadenza(id){
