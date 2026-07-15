@@ -1372,10 +1372,8 @@ function buildMastrinoRate(contoId){
       const stato = residuo<=0.01?'pagato':r.scadenza&&r.scadenza.slice(0,7)<meseCorr?'scaduto':r.scadenza&&r.scadenza.slice(0,7)===meseCorr?'corrente':'futuro';
       const clr = {pagato:'#E8F5E9',scaduto:'#FFEBEE',corrente:'#FFF9C4',futuro:'#E3F2FD'};
       const tclr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',futuro:'#1565C0'};
-      const scadEntry = scadenzario.find(function(s){ return s.pianoId===piano.id&&s.nRata===i+1; });
-      const scadId = scadEntry ? scadEntry.id : '';
-      const btnSalda = (stato!=='pagato'&&scadId)
-        ? '<button style="background:'+tclr[stato]+';color:#fff;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer" onclick="apriSaldaRata(\''+scadId+'\')">✓ Salda</button>'
+      const btnSalda = (stato!=='pagato')
+        ? '<button style="background:'+tclr[stato]+';color:#fff;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer" onclick="saldaRataDaMastrino(\''+piano.id+'\','+(i+1)+')">✓ Salda</button>'
         : '';
       const statoLabel = stato==='pagato'
         ? '✅ PAGATA'+(r.dataPagamento?' il '+fmtData(r.dataPagamento):'')
@@ -1715,6 +1713,13 @@ function aggiornaSacadenzarioDaPiano(piano){
 }
 
 // ── Apri modal saldo rata ──
+function saldaRataDaMastrino(pianoId, nRata){
+  // Cerca l'ID aggiornato della rata al momento del click
+  const s = scadenzario.find(x=>x.pianoId===pianoId && x.nRata===nRata);
+  if(!s){ alert('Rata non trovata nello scadenzario. Ricarica la pagina.'); return; }
+  apriSaldaRata(s.id);
+}
+
 function apriSaldaRata(scadId){
   const s = scadenzario.find(x=>x.id===scadId);
   if(!s) return;
