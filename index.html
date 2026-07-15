@@ -958,10 +958,11 @@ function salvaPrimaNota(){
     if(s){
       s.saldato = (s.saldato||0)+saldaImporto;
       s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
+      if(s.stato==='pagato') s.dataPagamento = document.getElementById('pn-data').value||new Date().toISOString().slice(0,10);
       const piano = pianiRateazione.find(p=>p.id===s.pianoId);
       if(piano){
         const rata = piano.rate.find(r=>r.id===s.id);
-        if(rata){ rata.saldato=(rata.saldato||0)+saldaImporto; rata.stato=s.stato; }
+        if(rata){ rata.saldato=(rata.saldato||0)+saldaImporto; rata.stato=s.stato; if(s.stato==='pagato') rata.dataPagamento=s.dataPagamento; }
       }
     }
     document.getElementById('modal-primanota').dataset.saldaRataId = '';
@@ -1262,16 +1263,19 @@ function buildMastrinoRate(contoId){
       const scadEntry = scadenzario.find(function(s){ return s.pianoId===piano.id&&s.nRata===i+1; });
       const scadId = scadEntry ? scadEntry.id : '';
       const btnSalda = (stato!=='pagato'&&scadId)
-        ? '<button style="background:'+tclr[stato]+';color:#fff;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer" onclick="apriSaldaRata(\''+scadId+'\')">✓</button>'
+        ? '<button style="background:'+tclr[stato]+';color:#fff;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer" onclick="apriSaldaRata(\''+scadId+'\')">✓ Salda</button>'
         : '';
-      return '<div style="display:grid;grid-template-columns:auto 1fr 100px 100px 80px 80px;gap:.3rem;padding:5px .8rem;border-bottom:.5px solid var(--border);background:'+clr[stato]+';font-size:11px;align-items:center">'
-        +'<span style="color:var(--text2);min-width:20px">'+(i+1)+'.</span>'
+      const statoLabel = stato==='pagato'
+        ? '✅ PAGATA'+(r.dataPagamento?' il '+fmtData(r.dataPagamento):'')
+        : stato==='scaduto'?'⚠️ SCADUTA':stato==='corrente'?'🔔 QUESTO MESE':'🔵 FUTURA';
+      return '<div style="display:grid;grid-template-columns:auto 1fr 100px 100px 80px auto;gap:.3rem;padding:6px .8rem;border-bottom:.5px solid var(--border);background:'+clr[stato]+';font-size:11px;align-items:center">'
+        +'<span style="color:var(--text2);min-width:20px;font-weight:700">'+(i+1)+'.</span>'
         +'<span style="color:var(--text2)">'+piano.desc+'</span>'
         +'<span style="text-align:right">'+(r.scadenza?fmtData(r.scadenza):'—')+'</span>'
         +'<span style="text-align:right;font-weight:700">'+fmt(r.importo)+'</span>'
         +'<span style="text-align:right;color:var(--ricavo)">'+(r.saldato?fmt(r.saldato):'—')+'</span>'
-        +'<div style="text-align:right">'+btnSalda
-        +'<span style="font-size:9px;font-weight:700;color:'+tclr[stato]+'">'+stato.toUpperCase()+'</span></div>'
+        +'<div style="text-align:right;white-space:nowrap">'+btnSalda
+        +' <span style="font-size:9px;font-weight:700;color:'+tclr[stato]+'">'+statoLabel+'</span></div>'
         +'</div>';
     });
   }).join('');
@@ -1642,13 +1646,15 @@ function saldaSoloScadenzario(){
   const s = scadenzario.find(x=>x.id===_saldaRataId);
   if(!s) return;
   const importo = parseFloat(document.getElementById('salda-importo').value)||s.importo;
+  const oggi_s = new Date().toISOString().slice(0,10);
   s.saldato = (s.saldato||0)+importo;
   s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
+  if(s.stato==='pagato') s.dataPagamento = oggi_s;
   // Aggiorna anche il piano
-  const piano = pianiRateazione.find(p=>p.id===s.pianoId);
-  if(piano){
-    const rata = piano.rate.find(r=>r.id===s.id);
-    if(rata){ rata.saldato=(rata.saldato||0)+importo; rata.stato=s.stato; }
+  const piano_s = pianiRateazione.find(p=>p.id===s.pianoId);
+  if(piano_s){
+    const rata_s = piano_s.rate.find(r=>r.id===s.id);
+    if(rata_s){ rata_s.saldato=(rata_s.saldato||0)+importo; rata_s.stato=s.stato; if(s.stato==='pagato') rata_s.dataPagamento=oggi_s; }
   }
   chiudiModal('modal-salda');
   buildScadenzario();
@@ -1691,10 +1697,11 @@ function confermaSaldaConPN(){
   // Aggiorna stato rata
   s.saldato = (s.saldato||0)+importo;
   s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
-  const piano = pianiRateazione.find(p=>p.id===s.pianoId);
-  if(piano){
-    const rata = piano.rate.find(r=>r.id===s.id);
-    if(rata){ rata.saldato=(rata.saldato||0)+importo; rata.stato=s.stato; }
+  if(s.stato==='pagato') s.dataPagamento = data;
+  const piano_c = pianiRateazione.find(p=>p.id===s.pianoId);
+  if(piano_c){
+    const rata_c = piano_c.rate.find(r=>r.id===s.id);
+    if(rata_c){ rata_c.saldato=(rata_c.saldato||0)+importo; rata_c.stato=s.stato; if(s.stato==='pagato') rata_c.dataPagamento=data; }
   }
 
   chiudiModal('modal-salda');
