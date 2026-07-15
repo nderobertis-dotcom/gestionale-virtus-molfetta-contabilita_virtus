@@ -171,9 +171,24 @@ tr:hover td{background:var(--bg)}
 }
 
 @media print{
-  .sidebar,#hamburger,.toolbar,.btn,.btn-del{display:none!important}
-  .page{display:block!important;padding:.5rem}
+  .sidebar,#hamburger,.toolbar,.btn,.btn-del,#sync-indicator,
+  .modal-overlay,.no-print{display:none!important}
+  .page{display:none;padding:.3rem}
+  .page.print-active{display:block!important}
+  .content{overflow:visible!important;width:100%}
+  .app{display:block}
+  body{background:#fff;font-size:11px;color:#000}
+  table{font-size:10px;width:100%}
+  th{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tbl-wrap{border:none;overflow:visible;box-shadow:none}
+  .metric{border:1px solid #ccc;break-inside:avoid}
+  .print-header{display:flex!important;justify-content:space-between;align-items:flex-start;
+    border-bottom:2px solid #1A1A2E;padding-bottom:.5rem;margin-bottom:1rem}
+  .mastrino{break-inside:avoid;margin-bottom:1rem}
+  .mastrino-header{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{margin:1.5cm;size:A4}
 }
+.print-header{display:none}
 </style>
 </head>
 <body>
@@ -259,6 +274,7 @@ tr:hover td{background:var(--bg)}
       <div class="page-header">
         <div class="page-title">📒 Prima Nota — Partita Doppia</div>
         <div class="page-sub">Ogni registrazione deve avere dare = avere</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('primanota')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
       <div class="toolbar">
         <select id="pn-filter-soc" class="form-input" style="width:auto" onchange="renderPrimaNota()">
@@ -291,6 +307,7 @@ tr:hover td{background:var(--bg)}
       <div class="page-header">
         <div class="page-title">📋 Mastrini</div>
         <div class="page-sub">Situazione per singolo conto</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('mastrini')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
       <div class="toolbar">
         <select id="mast-soc" class="form-input" style="width:auto" onchange="buildMastrini()">
@@ -315,6 +332,7 @@ tr:hover td{background:var(--bg)}
       <div class="page-header">
         <div class="page-title">⚖️ Bilancio di Apertura</div>
         <div class="page-sub">Saldi iniziali al 01/07/2026 — Dare = Avere</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('bilancio-apertura')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
       <div class="toolbar">
         <select id="ba-soc" class="form-input" style="width:auto" onchange="renderBilancioApertura()">
@@ -344,6 +362,7 @@ tr:hover td{background:var(--bg)}
       <div class="page-header">
         <div class="page-title">📊 Conto Economico</div>
         <div class="page-sub">Costi e Ricavi — Classi 4 e 5</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('conto-economico')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
       <div class="toolbar">
         <select id="ce-soc" class="form-input" style="width:auto" onchange="buildContoEconomico()">
@@ -359,6 +378,7 @@ tr:hover td{background:var(--bg)}
       <div class="page-header">
         <div class="page-title">📅 Scadenzario</div>
         <div class="page-sub">Crediti e debiti con scadenza — da registrazioni con data scadenza</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('scadenzario')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
       <div class="toolbar">
         <select id="scad-soc" class="form-input" style="width:auto" onchange="buildScadenzario()">
@@ -401,6 +421,7 @@ tr:hover td{background:var(--bg)}
       <div class="page-header">
         <div class="page-title">🏛 Situazione Patrimoniale</div>
         <div class="page-sub">Attività e Passività — Classi 1, 2 e 3</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('situazione-patrimoniale')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
       <div class="toolbar">
         <select id="sp-soc" class="form-input" style="width:auto" onchange="buildSituazionePatrimoniale()">
@@ -771,6 +792,62 @@ function aggiornaDatalist(){
     .join('');
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// STAMPA / PDF
+// ══════════════════════════════════════════════════════════════
+function stampaPDF(pageId){
+  // Rimuovi print-active da tutte le pagine
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-active'));
+  // Attiva solo la pagina richiesta
+  const pg = document.getElementById('page-'+pageId);
+  if(!pg){ alert('Pagina non trovata.'); return; }
+  pg.classList.add('print-active');
+  // Aggiungi header di stampa
+  aggiornaHeaderStampa(pageId);
+  window.print();
+  // Ripristina dopo la stampa
+  setTimeout(()=>{
+    pg.classList.remove('print-active');
+  }, 1000);
+}
+
+function aggiornaHeaderStampa(pageId){
+  // Rimuovi header precedenti
+  document.querySelectorAll('.print-header').forEach(h=>h.remove());
+
+  const nomiPagine = {
+    'primanota':'Prima Nota — Partita Doppia',
+    'mastrini':'Mastrini',
+    'bilancio-apertura':'Bilancio di Apertura al 01/07/2026',
+    'conto-economico':'Conto Economico',
+    'scadenzario':'Scadenzario',
+    'situazione-patrimoniale':'Situazione Patrimoniale',
+  };
+
+  const pg = document.getElementById('page-'+pageId);
+  if(!pg) return;
+
+  const soc = document.getElementById(pageId==='bilancio-apertura'?'ba-soc':
+    pageId==='conto-economico'?'ce-soc':
+    pageId==='situazione-patrimoniale'?'sp-soc':
+    pageId==='mastrini'?'mast-soc':'')?.value||'';
+
+  const header = document.createElement('div');
+  header.className = 'print-header';
+  header.innerHTML = `
+    <div>
+      <div style="font-size:16px;font-weight:800;color:#1A1A2E">${nomiPagine[pageId]||pageId}</div>
+      <div style="font-size:11px;color:#555;margin-top:.2rem">Gruppo Virtus Molfetta${soc?' — '+soc:''} · Stagione 2026/2027</div>
+    </div>
+    <div style="text-align:right;font-size:10px;color:#777">
+      <div>Stampato il: ${new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+      <div style="font-weight:700;margin-top:.2rem">gestionale-virtus-contabilita</div>
+    </div>`;
+
+  pg.insertBefore(header, pg.firstChild);
+}
+
 // ══════════════════════════════════════════════════════════════
 // HOME
 // ══════════════════════════════════════════════════════════════
@@ -1122,29 +1199,37 @@ function renderBilancioApertura(){
     const piano     = pianiRateazione.find(p=>p.regId==='apertura_'+b.id);
     const haPiano   = !!piano;
 
-    // Costruisci mini-preview rate se piano esiste
-    let ratePreview = '';
+    // Sommario collassato del piano rate
+    let rateSommario = '';
     if(piano && piano.rate.length>0){
-      const oggi = new Date().toISOString().slice(0,10);
-      const meseCorr = oggi.slice(0,7);
-      ratePreview = '<div style="margin-top:.3rem;font-size:10px">'
-        + piano.rate.map(function(r,idx){
-            const residuo = r.importo-(r.saldato||0);
-            const stato = residuo<=0.01?'pagato':r.scadenza&&r.scadenza.slice(0,7)<meseCorr?'scaduto':r.scadenza&&r.scadenza.slice(0,7)===meseCorr?'corrente':'futuro';
-            const clr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',futuro:'#1565C0'};
-            const label = stato==='pagato'
-              ? '✅ rata '+(idx+1)+' pagata'+(r.dataPagamento?' il '+fmtData(r.dataPagamento):'')
-              : (stato==='scaduto'?'⚠️':'🔵')+' rata '+(idx+1)+' — '+(r.scadenza?fmtData(r.scadenza):'—')+' — '+fmt(r.importo);
-            return '<span style="color:'+clr[stato]+';display:block">'+label+'</span>';
-          }).join('')
-        + '</div>';
+      const oggi2 = new Date().toISOString().slice(0,10);
+      const meseCorr2 = oggi2.slice(0,7);
+      const nTot    = piano.rate.length;
+      const nPagate = piano.rate.filter(r=>(r.importo-(r.saldato||0))<=0.01).length;
+      const nScad   = piano.rate.filter(r=>r.scadenza&&r.scadenza<oggi2&&(r.importo-(r.saldato||0))>0.01).length;
+      const residuo = piano.rate.reduce((s,r)=>s+(r.importo-(r.saldato||0)),0);
+      const clrRes  = nScad>0?'var(--costo)':'#1565C0';
+      const statoIc = nPagate===nTot?'✅':nScad>0?'⚠️':'📅';
+      rateSommario = `<span style="font-size:9px;color:${clrRes};margin-left:.4rem;cursor:pointer" onclick="toggleRateApertura('${b.id}')">
+        ${statoIc} ${nPagate}/${nTot} rate pagate · residuo <b>${fmt(residuo)}</b> ▼
+      </span>
+      <div id="rate-ap-${b.id}" style="display:none;margin-top:.3rem;font-size:10px;background:var(--bg3);border-radius:4px;padding:.3rem .5rem">
+        ${piano.rate.map((r,idx)=>{
+          const res2 = r.importo-(r.saldato||0);
+          const st2  = res2<=0.01?'pagato':r.scadenza&&r.scadenza.slice(0,7)<meseCorr2?'scaduto':r.scadenza&&r.scadenza.slice(0,7)===meseCorr2?'corrente':'futuro';
+          const clr2 = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',futuro:'#1565C0'};
+          const lbl  = st2==='pagato'
+            ? '✅ rata '+(idx+1)+' pagata'+(r.dataPagamento?' il '+fmtData(r.dataPagamento):'')
+            : (st2==='scaduto'?'⚠️':st2==='corrente'?'🔔':'🔵')+' rata '+(idx+1)+' — '+(r.scadenza?fmtData(r.scadenza):'—')+' — '+fmt(r.importo);
+          return `<div style="color:${clr2[st2]}">${lbl}</div>`;
+        }).join('')}
+      </div>`;
     }
     return `
     <tr style="background:${i%2?'var(--bg)':'var(--bg2)'}">
       <td style="font-size:11px;color:var(--text2)">${b.contoId}</td>
       <td style="font-weight:600">${getNomeContoById(b.contoId)}${b.note?`<br><span style="font-size:10px;color:var(--text2);font-style:italic">${b.note}</span>`:''}
-        ${haPiano?'<span style="font-size:9px;color:#1565C0;margin-left:.4rem">📅 rateizzato</span>':''}
-        ${ratePreview}
+        ${rateSommario}
       </td>
       <td class="dare-cell">${b.dare?fmt(b.dare):'—'}</td>
       <td class="avere-cell">${b.avere?fmt(b.avere):'—'}</td>
@@ -1163,6 +1248,12 @@ function renderBilancioApertura(){
       <td class="avere-cell">${fmt(totAvere)}</td>
       <td></td>
     </tr>`;
+}
+
+function toggleRateApertura(bid){
+  const el = document.getElementById('rate-ap-'+bid);
+  if(!el) return;
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
 }
 
 function apriRateazioneApertura(bid){
