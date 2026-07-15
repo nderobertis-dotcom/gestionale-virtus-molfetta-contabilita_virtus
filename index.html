@@ -949,6 +949,25 @@ function salvaPrimaNota(){
   chiudiModal('modal-primanota');
   renderPrimaNota();
   window.salvaEAggiorna && window.salvaEAggiorna();
+
+  // Se stiamo saldando una rata, aggiorna lo stato scadenzario
+  const saldaRataId = document.getElementById('modal-primanota').dataset.saldaRataId;
+  const saldaImporto = parseFloat(document.getElementById('modal-primanota').dataset.saldaImporto)||0;
+  if(saldaRataId && saldaImporto){
+    const s = scadenzario.find(x=>x.id===saldaRataId);
+    if(s){
+      s.saldato = (s.saldato||0)+saldaImporto;
+      s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
+      const piano = pianiRateazione.find(p=>p.id===s.pianoId);
+      if(piano){
+        const rata = piano.rate.find(r=>r.id===s.id);
+        if(rata){ rata.saldato=(rata.saldato||0)+saldaImporto; rata.stato=s.stato; }
+      }
+    }
+    document.getElementById('modal-primanota').dataset.saldaRataId = '';
+    document.getElementById('modal-primanota').dataset.saldaImporto = '';
+    buildScadenzario();
+  }
   // Offri piano rateazione per conti crediti/debiti (solo nuove registrazioni)
   if(!_editRegId){
     const contiRateabili = rec.righe.filter(r=>isContoRateabile(r.contoId));
@@ -1582,7 +1601,41 @@ function apriSaldaRata(scadId){
 }
 
 function saldaConPrimaNota(){
-  document.getElementById('salda-pn-form').style.display='block';
+  const s = scadenzario.find(x=>x.id===_saldaRataId);
+  if(!s) return;
+  const data    = document.getElementById('salda-data').value;
+  const importo = parseFloat(document.getElementById('salda-importo').value)||s.importo;
+  const isCredito = s.tipo==='credito';
+
+  // Chiudi il modal salda
+  chiudiModal('modal-salda');
+
+  // Prepara le righe standard della partita doppia
+  // Credito (incasso): Dare banca, Avere crediti
+  // Debito (pagamento): Dare debiti, Avere banca
+  _pdRighe = isCredito ? [
+    { tipo:'dare',  contoId:'', dare:importo, avere:0 },   // banca — da specificare
+    { tipo:'avere', contoId:s.contoId, dare:0, avere:importo },
+  ] : [
+    { tipo:'dare',  contoId:s.contoId, dare:importo, avere:0 },
+    { tipo:'avere', contoId:'', dare:0, avere:importo },   // banca — da specificare
+  ];
+
+  // Pre-compila il modal Prima Nota
+  _editRegId = null;
+  document.getElementById('pn-data').value = data || new Date().toISOString().slice(0,10);
+  document.getElementById('pn-soc').value  = s.soc||'VIRTUS';
+  document.getElementById('pn-desc').value = 'Saldo rata '+(s.nRata||'')+'/'+(s.totRate||'')+' — '+s.controparte;
+  document.getElementById('pn-rif').value  = '';
+  document.getElementById('pn-note').value = '';
+  document.getElementById('pn-scadenza').value = '';
+
+  // Salva il riferimento alla rata da saldare per aggiornare lo stato dopo il salvataggio
+  document.getElementById('modal-primanota').dataset.saldaRataId = _saldaRataId||'';
+  document.getElementById('modal-primanota').dataset.saldaImporto = importo;
+
+  renderPDRighe();
+  apriModal('modal-primanota');
 }
 
 function saldaSoloScadenzario(){
