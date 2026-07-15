@@ -736,7 +736,8 @@ let archivioVecchio = null; // Dati dal gestionale precedente
 // ══════════════════════════════════════════════════════════════
 function fmt(n){ return new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n||0); }
 function fmtData(d){ if(!d)return'—'; const dt=new Date(d); return dt.toLocaleDateString('it-IT'); }
-function genId(){ return '_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
+let _genIdCnt = 0;
+function genId(){ return '_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36)+(++_genIdCnt).toString(36); }
 
 function showPage(id, el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1715,6 +1716,15 @@ function aggiornaSacadenzarioDaPiano(piano){
 
 // Ripara nRata/totRate mancanti nello scadenzario usando i pianiRateazione
 function riparaNRata(){
+  // Deduplica ID duplicati nello scadenzario
+  const visti = new Set();
+  scadenzario.forEach(s=>{
+    if(visti.has(s.id)){
+      s.id = genId();
+    }
+    visti.add(s.id);
+  });
+  // Ripara nRata/totRate mancanti
   pianiRateazione.forEach(piano=>{
     const vociPiano = scadenzario.filter(s=>s.pianoId===piano.id);
     vociPiano.sort((a,b)=>(a.scadenza||'').localeCompare(b.scadenza||''));
