@@ -1118,12 +1118,32 @@ function renderBilancioApertura(){
   const tbody = document.getElementById('tbody-apertura');
   tbody.innerHTML = voci.map((b,i)=>{
     const rateabile = isContoRateabile(b.contoId);
-    const haPiano   = pianiRateazione.some(p=>p.regId==='apertura_'+b.id);
+    const piano     = pianiRateazione.find(p=>p.regId==='apertura_'+b.id);
+    const haPiano   = !!piano;
+
+    // Costruisci mini-preview rate se piano esiste
+    let ratePreview = '';
+    if(piano && piano.rate.length>0){
+      const oggi = new Date().toISOString().slice(0,10);
+      const meseCorr = oggi.slice(0,7);
+      ratePreview = '<div style="margin-top:.3rem;font-size:10px">'
+        + piano.rate.map(function(r,idx){
+            const residuo = r.importo-(r.saldato||0);
+            const stato = residuo<=0.01?'pagato':r.scadenza&&r.scadenza.slice(0,7)<meseCorr?'scaduto':r.scadenza&&r.scadenza.slice(0,7)===meseCorr?'corrente':'futuro';
+            const clr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',futuro:'#1565C0'};
+            const label = stato==='pagato'
+              ? '✅ rata '+(idx+1)+' pagata'+(r.dataPagamento?' il '+fmtData(r.dataPagamento):'')
+              : (stato==='scaduto'?'⚠️':'🔵')+' rata '+(idx+1)+' — '+(r.scadenza?fmtData(r.scadenza):'—')+' — '+fmt(r.importo);
+            return '<span style="color:'+clr[stato]+';display:block">'+label+'</span>';
+          }).join('')
+        + '</div>';
+    }
     return `
     <tr style="background:${i%2?'var(--bg)':'var(--bg2)'}">
       <td style="font-size:11px;color:var(--text2)">${b.contoId}</td>
       <td style="font-weight:600">${getNomeContoById(b.contoId)}${b.note?`<br><span style="font-size:10px;color:var(--text2);font-style:italic">${b.note}</span>`:''}
         ${haPiano?'<span style="font-size:9px;color:#1565C0;margin-left:.4rem">📅 rateizzato</span>':''}
+        ${ratePreview}
       </td>
       <td class="dare-cell">${b.dare?fmt(b.dare):'—'}</td>
       <td class="avere-cell">${b.avere?fmt(b.avere):'—'}</td>
@@ -1451,6 +1471,21 @@ let _saldaRataId = null;
 
 function apriModalRateazione(regId, contoId, override){
   const reg = registrazioni.find(r=>r.id===regId);
+
+  // Gestione voci di apertura (regId inizia con 'apertura_')
+  if(!reg && !override && regId && regId.startsWith('apertura_')){
+    const bid = regId.replace('apertura_','');
+    const b   = bilancioApertura.find(x=>x.id===bid);
+    if(b){
+      override = {
+        importoTot: (b.dare||0)+(b.avere||0),
+        tipo: getTipoRateazione(contoId)||'incasso',
+        soc:  b.soc,
+        desc: getNomeContoById(contoId)+(b.note?' — '+b.note:'')
+      };
+    }
+  }
+
   if(!reg && !override) return;
   const riga = reg ? reg.righe.find(r=>r.contoId===contoId) : null;
   const importoTot = override?.importoTot || (riga?(riga.dare||riga.avere):0);
