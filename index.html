@@ -1988,14 +1988,14 @@ function buildScadenzario(){
       const stClr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',aperto:'#1565C0'};
       const stLabel = {pagato:'✅ PAGATA'+(s.dataPagamento?' il '+fmtData(s.dataPagamento):''),scaduto:'⚠️ SCADUTA',corrente:'🔔 QUESTO MESE',aperto:'🔵 FUTURA'};
       html += `<tr style="border-bottom:.5px solid var(--border)">
-        <td style="padding:5px 10px;color:var(--text2)">${i+1}</td>
+        <td style="padding:5px 10px;color:var(--text2)">${s.nRata}</td>
         <td style="padding:5px 10px">${fmtData(s.scadenza)}</td>
         <td style="padding:5px 10px;text-align:right">${fmt(s.importo)}</td>
         <td style="padding:5px 10px;text-align:right;color:var(--ricavo)">${s.saldato?fmt(s.saldato):'—'}</td>
         <td style="padding:5px 10px;text-align:right;font-weight:700;color:var(--costo)">${res>0.01?fmt(res):'—'}</td>
         <td style="padding:5px 10px;font-weight:700;color:${stClr[st]}">${stLabel[st]}</td>
         <td style="padding:5px 10px">
-          ${st!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
+          ${st!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="saldaRataDaMastrino('${s.pianoId}',${s.nRata})">✓ Salda</button>`:''}
         </td>
       </tr>`;
     });
