@@ -1695,28 +1695,45 @@ function aggiornaSacadenzarioDaPiano(piano){
   // Aggiungi nuove
   piano.rate.forEach((r,i)=>{
     scadenzario.push({
-      id: r.id || genId(),
-      pianoId: piano.id,
-      regId:   piano.regId,
-      contoId: piano.contoId,
-      soc:     piano.soc,
-      tipo:    piano.tipo==='incasso'?'credito':'debito',
+      id:       r.id || genId(),
+      pianoId:  piano.id,
+      regId:    piano.regId,
+      contoId:  piano.contoId,
+      soc:      piano.soc,
+      tipo:     piano.tipo==='incasso'?'credito':'debito',
       controparte: piano.desc,
-      importo: r.importo,
-      saldato: r.saldato||0,
-      scadenza:r.scadenza,
-      stato:   r.stato||'aperto',
-      nRata:   i+1,
-      totRate: piano.rate.length
+      importo:  r.importo,
+      saldato:  r.saldato||0,
+      scadenza: r.scadenza,
+      stato:    r.stato||'aperto',
+      nRata:    i+1,      // numero intero esplicito
+      totRate:  piano.rate.length,
+      dataPagamento: r.dataPagamento||null
     });
+  });
+}
+
+// Ripara nRata/totRate mancanti nello scadenzario usando i pianiRateazione
+function riparaNRata(){
+  pianiRateazione.forEach(piano=>{
+    const vociPiano = scadenzario.filter(s=>s.pianoId===piano.id);
+    vociPiano.sort((a,b)=>(a.scadenza||'').localeCompare(b.scadenza||''));
+    vociPiano.forEach((s,i)=>{ s.nRata=i+1; s.totRate=piano.rate.length; });
   });
 }
 
 // ── Apri modal saldo rata ──
 function saldaRataDaMastrino(pianoId, nRata){
-  // Cerca l'ID aggiornato della rata al momento del click
-  const s = scadenzario.find(x=>x.pianoId===pianoId && x.nRata===nRata);
-  if(!s){ alert('Rata non trovata nello scadenzario. Ricarica la pagina.'); return; }
+  // Cerca prima per pianoId + posizione nel piano
+  const piano = pianiRateazione.find(p=>p.id===pianoId);
+  if(!piano){ alert('Piano non trovato.'); return; }
+  const rataIdx = parseInt(nRata)-1;
+  const rata = piano.rate[rataIdx];
+  if(!rata){ alert('Rata non trovata nel piano.'); return; }
+  // Cerca la voce scadenzario per pianoId + id rata
+  const s = scadenzario.find(x=>x.pianoId===pianoId && x.id===rata.id)
+         || scadenzario.find(x=>x.pianoId===pianoId && x.scadenza===rata.scadenza && Math.abs((x.importo||0)-(rata.importo||0))<0.01);
+  if(!s){ alert('Voce scadenzario non trovata. Usa Backup e ricarica.'); return; }
   apriSaldaRata(s.id);
 }
 
@@ -2385,7 +2402,8 @@ window.caricaDatiFirestore = async function(){
       if(d.registrazioni)    registrazioni    = d.registrazioni;
       if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
       if(d.scadenzario)      scadenzario      = d.scadenzario;
-    if(d.pianiRateazione) pianiRateazione = d.pianiRateazione;
+      if(d.pianiRateazione)  pianiRateazione  = d.pianiRateazione;
+      riparaNRata(); // ripara nRata mancanti
       console.log('✅ Dati caricati da Firestore');
     } else {
       await window.salvaDatiFirestore();
