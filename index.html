@@ -685,6 +685,26 @@ let pianoConti = [
 let registrazioni = []; // Prima Nota in partita doppia
 let bilancioApertura = []; // Saldi iniziali per società
 let scadenzario = []; // Voci con data scadenza
+let pianiRateazione = []; // Piani di rateazione collegati a registrazioni
+
+// Classi conti finanziari crediti/debiti (escluse cassa e banche)
+function isContoRateabile(contoId){
+  if(!contoId) return false;
+  const c = pianoConti.find(x=>x.id===contoId);
+  if(!c) return false;
+  const cl = parseInt(c.classe||c.codice?.split('.')[0]);
+  // Classe 1 (crediti, escluso 1.1.x cassa/banche) o Classe 2 (debiti)
+  if(cl===1 && !c.codice?.startsWith('1.1')) return true;
+  if(cl===2) return true;
+  return false;
+}
+
+function getTipoRateazione(contoId){
+  const c = pianoConti.find(x=>x.id===contoId);
+  if(!c) return null;
+  const cl = parseInt(c.classe||c.codice?.split('.')[0]);
+  return cl===1 ? 'incasso' : 'pagamento';
+}
 let archivioVecchio = null; // Dati dal gestionale precedente
 
 // ══════════════════════════════════════════════════════════════
@@ -926,6 +946,19 @@ function salvaPrimaNota(){
   chiudiModal('modal-primanota');
   renderPrimaNota();
   window.salvaEAggiorna && window.salvaEAggiorna();
+  // Offri piano rateazione per conti crediti/debiti (solo nuove registrazioni)
+  if(!_editRegId){
+    const contiRateabili = rec.righe.filter(r=>isContoRateabile(r.contoId));
+    if(contiRateabili.length>0){
+      const cr = contiRateabili[0];
+      const importo = cr.dare||cr.avere;
+      setTimeout(()=>{
+        if(confirm('Vuoi definire un piano di rateazione per "'+getNomeContoById(cr.contoId)+'" ('+fmt(importo)+')?')){
+          apriModalRateazione(rec.id, cr.contoId);
+        }
+      }, 300);
+    }
+  }
 }
 
 function aggiornaScadenzario(reg){
@@ -1137,7 +1170,10 @@ function buildMastrini(){
     return `<div class="mastrino">
       <div class="mastrino-header">
         <span>${conto.codice} — ${conto.nome}</span>
-        <span>Saldo: ${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</span>
+        <div style="display:flex;align-items:center;gap:.6rem">
+          <span>Saldo: ${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</span>
+          ${isContoRateabile(conto.id)?`<button style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:inherit" onclick="apriModalRateazionePerConto('${conto.id}')">📅 Piano rate</button>`:''}
+        </div>
       </div>
       <div class="mastrino-body">
         <div class="mastrino-th">Data</div>
@@ -1165,6 +1201,69 @@ function buildMastrini(){
       </div>
     </div>`;
   }).join('');
+}
+
+function buildMastrinoRate(contoId){
+  const piani = pianiRateazione.filter(p=>p.contoId===contoId);
+  if(!piani.length) return '';
+  const oggi = new Date().toISOString().slice(0,10);
+  const meseCorr = oggi.slice(0,7);
+
+  const righeHTML = piani.flatMap(function(piano){
+    return piano.rate.map(function(r,i){
+      const residuo = r.importo-(r.saldato||0);
+      const stato = residuo<=0.01?'pagato':r.scadenza&&r.scadenza.slice(0,7)<meseCorr?'scaduto':r.scadenza&&r.scadenza.slice(0,7)===meseCorr?'corrente':'futuro';
+      const clr = {pagato:'#E8F5E9',scaduto:'#FFEBEE',corrente:'#FFF9C4',futuro:'#E3F2FD'};
+      const tclr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',futuro:'#1565C0'};
+      const scadEntry = scadenzario.find(function(s){ return s.pianoId===piano.id&&s.nRata===i+1; });
+      const scadId = scadEntry ? scadEntry.id : '';
+      const btnSalda = (stato!=='pagato'&&scadId)
+        ? '<button style="background:'+tclr[stato]+';color:#fff;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer" onclick="apriSaldaRata(\''+scadId+'\')">✓</button>'
+        : '';
+      return '<div style="display:grid;grid-template-columns:auto 1fr 100px 100px 80px 80px;gap:.3rem;padding:5px .8rem;border-bottom:.5px solid var(--border);background:'+clr[stato]+';font-size:11px;align-items:center">'
+        +'<span style="color:var(--text2);min-width:20px">'+(i+1)+'.</span>'
+        +'<span style="color:var(--text2)">'+piano.desc+'</span>'
+        +'<span style="text-align:right">'+(r.scadenza?fmtData(r.scadenza):'—')+'</span>'
+        +'<span style="text-align:right;font-weight:700">'+fmt(r.importo)+'</span>'
+        +'<span style="text-align:right;color:var(--ricavo)">'+(r.saldato?fmt(r.saldato):'—')+'</span>'
+        +'<div style="text-align:right">'+btnSalda
+        +'<span style="font-size:9px;font-weight:700;color:'+tclr[stato]+'">'+stato.toUpperCase()+'</span></div>'
+        +'</div>';
+    });
+  }).join('');
+
+  return '<div style="margin-top:.4rem;border-top:2px solid rgba(255,255,255,.3)">'
+    +'<div style="background:#1A1A2E;color:#fff;padding:.4rem .8rem;font-size:10px;font-weight:700;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center">'
+    +'<span>📅 Piano Rate</span>'
+    +'<button style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer" onclick="apriModalRateazionePerConto(\''+contoId+'\')">✏ Modifica</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:auto 1fr 100px 100px 80px 80px;gap:.3rem;padding:4px .8rem;background:var(--bg3);font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">'
+    +'<span>#</span><span>Descrizione</span><span style="text-align:right">Scadenza</span><span style="text-align:right">Importo</span><span style="text-align:right">Saldato</span><span style="text-align:right">Stato</span>'
+    +'</div>'+righeHTML+'</div>';
+}
+
+function apriModalRateazionePerConto(contoId){
+  // Cerca il piano più recente per questo conto
+  const piani = pianiRateazione.filter(p=>p.contoId===contoId);
+  if(piani.length>0){
+    const piano = piani[piani.length-1];
+    apriModalRateazione(piano.regId, contoId);
+  } else {
+    // Crea nuovo piano calcolando il saldo del conto
+    const saldo = Math.abs(calcolaSaldoConto(contoId));
+    const tipo = getTipoRateazione(contoId)||'incasso';
+    const nomeConto = getNomeContoById(contoId);
+    apriModalRateazione('__manuale__', contoId, { importoTot:saldo, tipo, soc:'VIRTUS', desc:nomeConto });
+  }
+}
+
+function calcolaSaldoConto(contoId){
+  const conto = pianoConti.find(c=>c.id===contoId);
+  const cl = parseInt(conto?.classe||conto?.codice?.split('.')[0]);
+  let totD=0, totA=0;
+  registrazioni.forEach(r=>r.righe.filter(rg=>rg.contoId===contoId).forEach(rg=>{totD+=rg.dare||0;totA+=rg.avere||0;}));
+  bilancioApertura.filter(b=>b.contoId===contoId).forEach(b=>{totD+=b.dare||0;totA+=b.avere||0;});
+  return cl===1 ? totD-totA : totA-totD;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1296,6 +1395,238 @@ function buildSituazionePatrimoniale(){
 }
 
 // ══════════════════════════════════════════════════════════════
+// PIANI DI RATEAZIONE
+// ══════════════════════════════════════════════════════════════
+let _rateContext = null; // { regId, contoId, importoTot, tipo, soc, desc }
+let _righeRate   = [];
+let _saldaRataId = null;
+
+function apriModalRateazione(regId, contoId, override){
+  const reg = registrazioni.find(r=>r.id===regId);
+  if(!reg && !override) return;
+  const riga = reg ? reg.righe.find(r=>r.contoId===contoId) : null;
+  const importoTot = override?.importoTot || (riga?(riga.dare||riga.avere):0);
+  const tipo = getTipoRateazione(contoId) || override?.tipo || 'incasso';
+  const soc  = (reg?.soc) || override?.soc || 'VIRTUS';
+  const desc = (reg?.desc) || override?.desc || '';
+
+  _rateContext = { regId, contoId, importoTot, tipo, soc, desc };
+
+  // Cerca piano esistente
+  const pianoEsistente = pianiRateazione.find(p=>p.regId===regId&&p.contoId===contoId);
+
+  document.getElementById('rate-modal-title').textContent =
+    tipo==='incasso' ? '📅 Piano Incassi — Rate da ricevere' : '📅 Piano Pagamenti — Rate da effettuare';
+  document.getElementById('rate-info').innerHTML =
+    `<b>${desc}</b> · ${soc} · Importo totale: <b style="color:var(--dare)">${fmt(importoTot)}</b> · Tipo: <b>${tipo==='incasso'?'📥 Incasso':'📤 Pagamento'}</b>`;
+
+  if(pianoEsistente){
+    _righeRate = JSON.parse(JSON.stringify(pianoEsistente.rate));
+    document.getElementById('rate-numero').value = _righeRate.length;
+    document.getElementById('rate-prima-data').value = _righeRate[0]?.scadenza||'';
+    renderRigheRate();
+  } else {
+    const nRate = 1;
+    const oggi = new Date().toISOString().slice(0,10);
+    document.getElementById('rate-numero').value = nRate;
+    document.getElementById('rate-prima-data').value = oggi;
+    generaRigheRate();
+  }
+  apriModal('modal-rateazione');
+}
+
+function generaRigheRate(){
+  const n = parseInt(document.getElementById('rate-numero').value)||1;
+  const primaData = document.getElementById('rate-prima-data').value;
+  const importoTot = _rateContext?.importoTot||0;
+  const rataBase = Math.floor(importoTot/n*100)/100;
+  const ultima = Math.round((importoTot - rataBase*(n-1))*100)/100;
+
+  _righeRate = Array(n).fill(null).map((_,i)=>{
+    let data = '';
+    if(primaData){
+      const d = new Date(primaData);
+      d.setMonth(d.getMonth()+i);
+      data = d.toISOString().slice(0,10);
+    }
+    return {
+      id: _righeRate[i]?.id || genId(),
+      scadenza: data,
+      importo: i===n-1 ? ultima : rataBase,
+      saldato: _righeRate[i]?.saldato||0,
+      stato: _righeRate[i]?.stato||'aperto'
+    };
+  });
+  renderRigheRate();
+}
+
+function renderRigheRate(){
+  const cont = document.getElementById('rate-righe');
+  if(!cont) return;
+  const oggi = new Date().toISOString().slice(0,10);
+  const meseCorr = oggi.slice(0,7);
+
+  cont.innerHTML = _righeRate.map((r,i)=>{
+    const stato = r.saldato>=(r.importo-0.01)?'saldata':r.scadenza&&r.scadenza.slice(0,7)<meseCorr?'scaduta':r.scadenza&&r.scadenza.slice(0,7)===meseCorr?'corrente':'futura';
+    const statoBg = {saldata:'#E8F5E9',scaduta:'#FFEBEE',corrente:'#FFFDE7',futura:'#E3F2FD'};
+    const statoClr = {saldata:'var(--ricavo)',scaduta:'var(--costo)',corrente:'#F57F17',futura:'#1565C0'};
+    return `<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:.3rem;margin-bottom:.25rem;align-items:center;background:${statoBg[stato]};border-radius:4px;padding:2px .2rem">
+      <div style="font-size:10px;font-weight:700;text-align:center;color:var(--text2)">${i+1}</div>
+      <input type="date" class="form-input" value="${r.scadenza||''}" style="font-size:11px;padding:4px 6px"
+        onchange="_righeRate[${i}].scadenza=this.value;verificaTotaleRate()">
+      <input type="number" class="form-input" value="${r.importo||''}" style="font-size:11px;padding:4px 6px;text-align:right"
+        onchange="_righeRate[${i}].importo=parseFloat(this.value)||0;verificaTotaleRate()">
+      <button class="btn-del" style="padding:1px 5px;font-size:10px" onclick="_righeRate.splice(${i},1);renderRigheRate()" title="Rimuovi rata">✕</button>
+    </div>`;
+  }).join('');
+
+  verificaTotaleRate();
+}
+
+function verificaTotaleRate(){
+  const tot = _righeRate.reduce((s,r)=>s+(parseFloat(r.importo)||0),0);
+  const atteso = _rateContext?.importoTot||0;
+  const diff = Math.abs(tot-atteso);
+  const el = document.getElementById('rate-totale-check');
+  if(diff<0.01){
+    el.innerHTML = `<span style="color:var(--ricavo)">✅ Totale rate = ${fmt(tot)}</span>`;
+  } else {
+    el.innerHTML = `<span style="color:var(--costo)">⚠️ Totale rate ${fmt(tot)} ≠ Importo registrazione ${fmt(atteso)} (diff: ${fmt(diff)})</span>`;
+  }
+}
+
+function salvaRateazione(){
+  if(!_rateContext) return;
+  const {regId, contoId, tipo, soc, desc} = _rateContext;
+  const idx = pianiRateazione.findIndex(p=>p.regId===regId&&p.contoId===contoId);
+  const piano = {
+    id: idx>=0 ? pianiRateazione[idx].id : genId(),
+    regId, contoId, tipo, soc, desc,
+    rate: _righeRate.map(r=>({...r, importo:parseFloat(r.importo)||0}))
+  };
+  if(idx>=0) pianiRateazione[idx]=piano;
+  else pianiRateazione.push(piano);
+
+  // Aggiorna scadenzario
+  aggiornaSacadenzarioDaPiano(piano);
+
+  chiudiModal('modal-rateazione');
+  buildScadenzario();
+  buildMastrini();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+function aggiornaSacadenzarioDaPiano(piano){
+  // Rimuovi vecchie scadenze di questo piano
+  scadenzario = scadenzario.filter(s=>s.pianoId!==piano.id);
+  // Aggiungi nuove
+  piano.rate.forEach((r,i)=>{
+    scadenzario.push({
+      id: r.id || genId(),
+      pianoId: piano.id,
+      regId:   piano.regId,
+      contoId: piano.contoId,
+      soc:     piano.soc,
+      tipo:    piano.tipo==='incasso'?'credito':'debito',
+      controparte: piano.desc,
+      importo: r.importo,
+      saldato: r.saldato||0,
+      scadenza:r.scadenza,
+      stato:   r.stato||'aperto',
+      nRata:   i+1,
+      totRate: piano.rate.length
+    });
+  });
+}
+
+// ── Apri modal saldo rata ──
+function apriSaldaRata(scadId){
+  const s = scadenzario.find(x=>x.id===scadId);
+  if(!s) return;
+  _saldaRataId = scadId;
+  const residuo = s.importo-(s.saldato||0);
+  document.getElementById('salda-info').innerHTML =
+    `<b>${s.controparte}</b> · ${s.soc} · Rata ${s.nRata||''}/${s.totRate||''} · ` +
+    `Scadenza: <b>${fmtData(s.scadenza)}</b> · Importo: <b>${fmt(s.importo)}</b> · Residuo: <b style="color:var(--costo)">${fmt(residuo)}</b>`;
+  document.getElementById('salda-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('salda-importo').value = residuo.toFixed(2);
+  document.getElementById('salda-conto-contro').value = '';
+  document.getElementById('salda-note').value = '';
+  document.getElementById('salda-pn-form').style.display='none';
+  apriModal('modal-salda');
+}
+
+function saldaConPrimaNota(){
+  document.getElementById('salda-pn-form').style.display='block';
+}
+
+function saldaSoloScadenzario(){
+  const s = scadenzario.find(x=>x.id===_saldaRataId);
+  if(!s) return;
+  const importo = parseFloat(document.getElementById('salda-importo').value)||s.importo;
+  s.saldato = (s.saldato||0)+importo;
+  s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
+  // Aggiorna anche il piano
+  const piano = pianiRateazione.find(p=>p.id===s.pianoId);
+  if(piano){
+    const rata = piano.rate.find(r=>r.id===s.id);
+    if(rata){ rata.saldato=(rata.saldato||0)+importo; rata.stato=s.stato; }
+  }
+  chiudiModal('modal-salda');
+  buildScadenzario();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+function confermaSaldaConPN(){
+  const s = scadenzario.find(x=>x.id===_saldaRataId);
+  if(!s) return;
+  const data   = document.getElementById('salda-data').value;
+  const importo= parseFloat(document.getElementById('salda-importo').value)||0;
+  const contoControStr = document.getElementById('salda-conto-contro').value.trim();
+  const note   = document.getElementById('salda-note').value.trim();
+
+  if(!data||!importo||!contoControStr){ alert('Compila tutti i campi.'); return; }
+  const contoContro = pianoConti.find(c=>`${c.codice} — ${c.nome}`===contoControStr||c.id===contoControStr||c.nome===contoControStr);
+  if(!contoContro){ alert('Seleziona un conto di contropartita valido.'); return; }
+
+  // Crea registrazione in Prima Nota
+  // Se credito (incasso): Dare banca, Avere crediti
+  // Se debito (pagamento): Dare debiti, Avere banca
+  const isCredito = s.tipo==='credito';
+  const reg = {
+    id: genId(),
+    data, soc: s.soc,
+    desc: `Saldo rata ${s.nRata||''}/${s.totRate||''} — ${s.controparte}`,
+    rif: note, note: '',
+    scadenza: null,
+    righe: isCredito ? [
+      { tipo:'dare',  contoId:contoContro.id, dare:importo, avere:0 },
+      { tipo:'avere', contoId:s.contoId,      dare:0, avere:importo },
+    ] : [
+      { tipo:'dare',  contoId:s.contoId,      dare:importo, avere:0 },
+      { tipo:'avere', contoId:contoContro.id, dare:0, avere:importo },
+    ],
+    creatoIl: new Date().toISOString()
+  };
+  registrazioni.push(reg);
+
+  // Aggiorna stato rata
+  s.saldato = (s.saldato||0)+importo;
+  s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
+  const piano = pianiRateazione.find(p=>p.id===s.pianoId);
+  if(piano){
+    const rata = piano.rate.find(r=>r.id===s.id);
+    if(rata){ rata.saldato=(rata.saldato||0)+importo; rata.stato=s.stato; }
+  }
+
+  chiudiModal('modal-salda');
+  buildScadenzario();
+  renderPrimaNota();
+  buildMastrini();
+  window.salvaEAggiorna && window.salvaEAggiorna();
+}
+
+// ══════════════════════════════════════════════════════════════
 // SCADENZARIO
 // ══════════════════════════════════════════════════════════════
 function buildScadenzario(){
@@ -1333,11 +1664,13 @@ function buildScadenzario(){
 
   tbody.innerHTML = voci.map(s=>{
     const residuo = s.importo-(s.saldato||0);
-    const stato = residuo<=0.01?'pagato':s.scadenza<oggi?'scaduto':'aperto';
+    const meseCorr = oggi.slice(0,7);
+    const stato = residuo<=0.01?'pagato':s.scadenza<oggi?'scaduto':s.scadenza?.slice(0,7)===meseCorr?'corrente':'aperto';
     const statiStyle = {
-      pagato:  'background:#C8E6C9;color:#1A5C38',
-      scaduto: 'background:#FFCDD2;color:#C62828',
-      aperto:  'background:#E3F2FD;color:#0D47A1',
+      pagato:   'background:#C8E6C9;color:#1A5C38',
+      scaduto:  'background:#FFCDD2;color:#C62828',
+      corrente: 'background:#FFF9C4;color:#F57F17',
+      aperto:   'background:#BBDEFB;color:#1565C0',
     };
     return `<tr>
       <td style="white-space:nowrap;${stato==='scaduto'?'color:var(--dare);font-weight:700':''}">${fmtData(s.scadenza)}</td>
@@ -1347,10 +1680,11 @@ function buildScadenzario(){
       <td style="font-size:11px;color:var(--text2)">${getNomeContoById(s.contoId)}</td>
       <td class="num">${fmt(s.importo)}</td>
       <td class="num avere-cell">${s.saldato?fmt(s.saldato):'—'}</td>
-      <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato.toUpperCase()}</span></td>
+      <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato==='aperto'?'FUTURO':stato==='corrente'?'QUESTO MESE':stato.toUpperCase()}</span></td>
       <td style="font-size:10px;color:var(--text2)">${s.note||'—'}</td>
       <td style="white-space:nowrap">
-        ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="saldaScadenza('${s.id}')">✓ Salda</button>`:''}
+        ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
+        ${s.pianoId?`<button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="apriModalRateazione('${s.regId||''}','${s.contoId}')">📅</button>`:''}
       </td>
     </tr>`;
   }).join('');
@@ -1598,7 +1932,7 @@ function esportaBackup(){
   const backup = {
     versione:'2.0-contabilita',
     data: new Date().toISOString(),
-    pianoConti, registrazioni, bilancioApertura, scadenzario
+    pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione
   };
   const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const a = document.createElement('a');
@@ -1620,6 +1954,7 @@ function importaBackup(event){
       if(b.registrazioni) registrazioni  = b.registrazioni;
       if(b.bilancioApertura) bilancioApertura = b.bilancioApertura;
       if(b.scadenzario)   scadenzario    = b.scadenzario;
+      if(b.pianiRateazione) pianiRateazione = b.pianiRateazione;
       await window.salvaDatiFirestore();
       buildHome();
       alert('✅ Ripristino completato.');
@@ -1682,7 +2017,7 @@ const ADMIN_NOME = 'Nico de Robertis';
 window.salvaDatiFirestore = async function(){
   try{
     await DATI_REF().set({
-      pianoConti, registrazioni, bilancioApertura, scadenzario,
+      pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione,
       aggiornatoIl: new Date().toISOString(),
       aggiornatoDa: window._currentUser?.nome||'sistema'
     });
@@ -1717,6 +2052,7 @@ window.caricaDatiFirestore = async function(){
       if(d.registrazioni)    registrazioni    = d.registrazioni;
       if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
       if(d.scadenzario)      scadenzario      = d.scadenzario;
+    if(d.pianiRateazione) pianiRateazione = d.pianiRateazione;
       console.log('✅ Dati caricati da Firestore');
     } else {
       await window.salvaDatiFirestore();
@@ -1736,6 +2072,7 @@ window.avviaListenerDati = function(){
     if(d.registrazioni)    registrazioni    = d.registrazioni;
     if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
     if(d.scadenzario)      scadenzario      = d.scadenzario;
+    if(d.pianiRateazione) pianiRateazione = d.pianiRateazione;
     buildHome();
     aggiornaDatalist();
   }, err=>console.error('Listener:',err.message));
@@ -1833,5 +2170,74 @@ async function cambiaRuoloUtente(uid,ruolo){
   await db.collection('utenti').doc(uid).set({ruolo},{merge:true});
 }
 </script>
+
+<!-- MODAL PIANO RATEAZIONE -->
+<div class="modal-overlay" id="modal-rateazione" onclick="if(event.target===this)chiudiModal('modal-rateazione')">
+  <div class="modal" style="width:660px">
+    <div class="modal-title" id="rate-modal-title">📅 Piano di Rateazione</div>
+    <div id="rate-info" style="background:var(--bg);border-radius:var(--radius);padding:.6rem .8rem;margin-bottom:.8rem;font-size:12px;color:var(--text2)"></div>
+    <div class="two-col" style="margin-bottom:.6rem">
+      <div class="form-row">
+        <label class="form-label">Numero rate</label>
+        <input type="number" class="form-input" id="rate-numero" min="1" max="60" value="1" oninput="generaRigheRate()">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Prima scadenza</label>
+        <input type="date" class="form-input" id="rate-prima-data" oninput="generaRigheRate()">
+      </div>
+    </div>
+    <div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:.4rem">Rate (modificabili singolarmente)</div>
+    <div style="max-height:320px;overflow-y:auto">
+      <div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:.3rem;padding:.3rem .2rem;background:var(--bg);border-radius:4px;margin-bottom:.3rem">
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-align:center">#</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2)">Scadenza</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-align:right">Importo €</div>
+        <div></div>
+      </div>
+      <div id="rate-righe"></div>
+    </div>
+    <div id="rate-totale-check" style="text-align:right;font-size:11px;font-weight:700;margin-top:.4rem;padding-top:.4rem;border-top:.5px solid var(--border)"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-rateazione')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaRateazione()">Salva piano</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SALDA RATA -->
+<div class="modal-overlay" id="modal-salda" onclick="if(event.target===this)chiudiModal('modal-salda')">
+  <div class="modal" style="width:480px">
+    <div class="modal-title">✅ Salda Rata</div>
+    <div id="salda-info" style="background:var(--bg);border-radius:var(--radius);padding:.6rem .8rem;margin-bottom:.8rem;font-size:12px;color:var(--text2)"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:.6rem">Scegli come registrare il saldo:</div>
+    <div style="display:flex;gap:.6rem;margin-bottom:.8rem">
+      <button class="btn btn-dark" onclick="saldaConPrimaNota()" style="flex:1">📒 Crea registrazione in Prima Nota</button>
+      <button class="btn" onclick="saldaSoloScadenzario()" style="flex:1">✓ Segna solo come saldata</button>
+    </div>
+    <div id="salda-pn-form" style="display:none">
+      <div class="form-row">
+        <label class="form-label">Data incasso/pagamento</label>
+        <input type="date" class="form-input" id="salda-data">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Conto di contropartita (es. Banca)</label>
+        <input type="text" class="form-input" id="salda-conto-contro" list="pdc-datalist" placeholder="es. 1.1.2.1 — Monte dei Paschi VIRTUS">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Importo saldato €</label>
+        <input type="number" class="form-input" id="salda-importo">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Note</label>
+        <input type="text" class="form-input" id="salda-note" placeholder="Riferimento bonifico, ecc.">
+      </div>
+      <button class="btn btn-dark" style="width:100%;margin-top:.3rem" onclick="confermaSaldaConPN()">Conferma e registra</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-salda')">Annulla</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
