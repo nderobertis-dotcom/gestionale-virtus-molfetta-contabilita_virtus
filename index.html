@@ -365,6 +365,9 @@ tr:hover td{background:var(--bg)}
           <option value="">Tutte le società</option>
           <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
         </select>
+        <select id="scad-mese" class="form-input" style="width:auto" onchange="buildScadenzario()">
+          <option value="">Tutti i mesi</option>
+        </select>
         <select id="scad-tipo" class="form-input" style="width:auto" onchange="buildScadenzario()">
           <option value="">Tutti</option>
           <option value="credito">Crediti</option>
@@ -1630,13 +1633,32 @@ function confermaSaldaConPN(){
 // SCADENZARIO
 // ══════════════════════════════════════════════════════════════
 function buildScadenzario(){
+  // Popola il select mesi se vuoto
+  const selMese = document.getElementById('scad-mese');
+  if(selMese && selMese.options.length<=1){
+    // Stagione luglio 2026 - giugno 2027
+    const mesiStagione = [
+      ['2026-07','Luglio 2026'],['2026-08','Agosto 2026'],['2026-09','Settembre 2026'],
+      ['2026-10','Ottobre 2026'],['2026-11','Novembre 2026'],['2026-12','Dicembre 2026'],
+      ['2027-01','Gennaio 2027'],['2027-02','Febbraio 2027'],['2027-03','Marzo 2027'],
+      ['2027-04','Aprile 2027'],['2027-05','Maggio 2027'],['2027-06','Giugno 2027'],
+    ];
+    mesiStagione.forEach(([val,label])=>{
+      const opt = document.createElement('option');
+      opt.value=val; opt.textContent=label;
+      selMese.appendChild(opt);
+    });
+  }
+
   const filtSoc  = document.getElementById('scad-soc')?.value||'';
+  const filtMese = document.getElementById('scad-mese')?.value||'';
   const filtTipo = document.getElementById('scad-tipo')?.value||'';
   const filtStat = document.getElementById('scad-stato')?.value||'';
   const oggi = new Date().toISOString().slice(0,10);
 
   let voci = scadenzario.filter(s=>{
     if(filtSoc  && s.soc!==filtSoc)   return false;
+    if(filtMese && (!s.scadenza||!s.scadenza.startsWith(filtMese))) return false;
     if(filtTipo && s.tipo!==filtTipo) return false;
     if(filtStat){
       const stato = s.saldato>=(s.importo-0.01)?'pagato':s.scadenza<oggi?'scaduto':'aperto';
