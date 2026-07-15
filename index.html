@@ -912,7 +912,7 @@ function aggiornaSaldoPD(){
   }
 }
 
-function salvaPrimaNota(){
+async function salvaPrimaNota(){
   const data = document.getElementById('pn-data').value;
   const soc  = document.getElementById('pn-soc').value;
   const desc = document.getElementById('pn-desc').value.trim();
@@ -967,6 +967,7 @@ function salvaPrimaNota(){
     }
     document.getElementById('modal-primanota').dataset.saldaRataId = '';
     document.getElementById('modal-primanota').dataset.saldaImporto = '';
+    if(window.salvaEAggiorna) await window.salvaEAggiorna();
     buildScadenzario();
   }
   // Offri piano rateazione per conti crediti/debiti (solo nuove registrazioni)
@@ -1677,7 +1678,7 @@ function saldaConPrimaNota(){
   apriModal('modal-primanota');
 }
 
-function saldaSoloScadenzario(){
+async function saldaSoloScadenzario(){
   const s = scadenzario.find(x=>x.id===_saldaRataId);
   if(!s) return;
   const importo = parseFloat(document.getElementById('salda-importo').value)||s.importo;
@@ -1693,10 +1694,11 @@ function saldaSoloScadenzario(){
   }
   chiudiModal('modal-salda');
   buildScadenzario();
-  window.salvaEAggiorna && window.salvaEAggiorna();
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario(); // ricostruisce dopo il salvataggio per sicurezza
 }
 
-function confermaSaldaConPN(){
+async function confermaSaldaConPN(){
   const s = scadenzario.find(x=>x.id===_saldaRataId);
   if(!s) return;
   const data   = document.getElementById('salda-data').value;
@@ -1740,10 +1742,10 @@ function confermaSaldaConPN(){
   }
 
   chiudiModal('modal-salda');
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
   buildScadenzario();
   renderPrimaNota();
   buildMastrini();
-  window.salvaEAggiorna && window.salvaEAggiorna();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2153,14 +2155,18 @@ const ADMIN_UID  = 'rCC7FsynxFV6SXrUlrKAjGqIq782';
 const ADMIN_NOME = 'Nico de Robertis';
 
 // ── SALVATAGGIO ──
+let _salvataggioInCorso = false;
+
 window.salvaDatiFirestore = async function(){
   try{
+    _salvataggioInCorso = true;
     await DATI_REF().set({
       pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione,
       aggiornatoIl: new Date().toISOString(),
       aggiornatoDa: window._currentUser?.nome||'sistema'
     });
   }catch(e){ console.error('Errore salvataggio:',e.message); }
+  finally{ setTimeout(()=>{ _salvataggioInCorso = false; }, 1000); }
 };
 
 window.salvaEAggiorna = async function(){
@@ -2206,12 +2212,14 @@ window.avviaListenerDati = function(){
   let primo = true;
   const unsub = DATI_REF().onSnapshot(snap=>{
     if(!snap.exists||primo){ primo=false; return; }
+    // Non sovrascrivere durante un salvataggio in corso
+    if(_salvataggioInCorso) return;
     const d = snap.data();
     if(d.pianoConti)       pianoConti       = d.pianoConti;
     if(d.registrazioni)    registrazioni    = d.registrazioni;
     if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
     if(d.scadenzario)      scadenzario      = d.scadenzario;
-    if(d.pianiRateazione) pianiRateazione = d.pianiRateazione;
+    if(d.pianiRateazione)  pianiRateazione  = d.pianiRateazione;
     buildHome();
     aggiornaDatalist();
   }, err=>console.error('Listener:',err.message));
