@@ -1096,17 +1096,24 @@ function renderBilancioApertura(){
   `;
 
   const tbody = document.getElementById('tbody-apertura');
-  tbody.innerHTML = voci.map((b,i)=>`
+  tbody.innerHTML = voci.map((b,i)=>{
+    const rateabile = isContoRateabile(b.contoId);
+    const haPiano   = pianiRateazione.some(p=>p.regId==='apertura_'+b.id);
+    return `
     <tr style="background:${i%2?'var(--bg)':'var(--bg2)'}">
       <td style="font-size:11px;color:var(--text2)">${b.contoId}</td>
-      <td style="font-weight:600">${getNomeContoById(b.contoId)}${b.note?`<br><span style="font-size:10px;color:var(--text2);font-style:italic">${b.note}</span>`:''}</td>
+      <td style="font-weight:600">${getNomeContoById(b.contoId)}${b.note?`<br><span style="font-size:10px;color:var(--text2);font-style:italic">${b.note}</span>`:''}
+        ${haPiano?'<span style="font-size:9px;color:#1565C0;margin-left:.4rem">📅 rateizzato</span>':''}
+      </td>
       <td class="dare-cell">${b.dare?fmt(b.dare):'—'}</td>
       <td class="avere-cell">${b.avere?fmt(b.avere):'—'}</td>
-      <td>
+      <td style="white-space:nowrap">
         <button class="btn" style="font-size:10px;padding:2px 8px;margin-right:3px" onclick="openModalApertura('${b.id}')">✏</button>
+        ${rateabile?`<button class="btn" style="font-size:10px;padding:2px 6px;margin-right:3px;color:#1565C0;border-color:#1565C0" onclick="apriRateazioneApertura('${b.id}')">📅</button>`:''}
         <button class="btn-del" onclick="bilancioApertura=bilancioApertura.filter(x=>x.id!=='${b.id}');renderBilancioApertura();window.salvaEAggiorna&&window.salvaEAggiorna()">✕</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   document.getElementById('tfoot-apertura').innerHTML=`
     <tr style="font-weight:700;background:var(--bg3);border-top:2px solid var(--border2)">
@@ -1115,6 +1122,21 @@ function renderBilancioApertura(){
       <td class="avere-cell">${fmt(totAvere)}</td>
       <td></td>
     </tr>`;
+}
+
+function apriRateazioneApertura(bid){
+  const b = bilancioApertura.find(x=>x.id===bid);
+  if(!b) return;
+  // Le voci di apertura usano come regId 'apertura_'+id
+  const regId = 'apertura_'+bid;
+  const importoTot = (b.dare||0) + (b.avere||0);
+  const tipo = getTipoRateazione(b.contoId)||'incasso';
+  apriModalRateazione(regId, b.contoId, {
+    importoTot,
+    tipo,
+    soc: b.soc,
+    desc: getNomeContoById(b.contoId) + (b.note?' — '+b.note:'')
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
