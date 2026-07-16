@@ -173,30 +173,32 @@ tr:hover td{background:var(--bg)}
 @media print{
   .sidebar,#hamburger,.toolbar,.btn,.btn-del,#sync-indicator,
   .modal-overlay,.no-print{display:none!important}
-  .page{display:none;padding:.3rem}
-  .page.print-active{display:block!important}
-  .content{overflow:visible!important;width:100%}
-  .app{display:block}
-  body{background:#fff;font-size:10px;color:#000}
+  /* Rimuovi tutti i vincoli di altezza e overflow */
+  html,body{height:auto!important;overflow:visible!important}
+  .app{display:block!important;height:auto!important;overflow:visible!important}
+  .content{height:auto!important;overflow:visible!important;width:100%!important}
+  .sidebar{display:none!important}
+  .page{display:none!important;height:auto!important;overflow:visible!important;padding:.3rem}
+  .page.print-active{display:block!important;height:auto!important;overflow:visible!important}
+  .tbl-wrap{overflow:visible!important;height:auto!important;box-shadow:none;border:none}
+  .mastrino{overflow:visible!important;break-inside:avoid;margin-bottom:.8rem}
+  /* Font e dimensioni */
+  body{background:#fff!important;font-size:10px;color:#000}
   table{font-size:9px;width:100%}
   th{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .tbl-wrap{border:none;overflow:visible!important;box-shadow:none}
   /* Metriche compatte su una riga */
   .metrics{display:flex!important;flex-wrap:nowrap!important;gap:.3rem!important;margin-bottom:.5rem!important}
-  .metric{flex:1;border:1px solid #ccc;padding:.3rem .5rem!important;break-inside:avoid;min-width:0}
+  .metric{flex:1;border:1px solid #ccc!important;padding:.3rem .5rem!important;break-inside:avoid;min-width:0;background:#fff!important}
   .metric-label{font-size:7px!important;margin-bottom:.1rem!important}
   .metric-value{font-size:13px!important}
-  /* Grid a due colonne → colonna singola in stampa */
+  /* Grid a due colonne → colonna singola */
   .sp-grid{display:block!important}
   .sp-grid > *{margin-bottom:.6rem}
-  /* Mastrini */
-  .mastrino{break-inside:avoid;margin-bottom:.8rem}
-  .mastrino-header{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .mastrino-body{font-size:9px}
   /* Header stampa */
   .print-header{display:flex!important;justify-content:space-between;align-items:flex-start;
     border-bottom:2px solid #1A1A2E;padding-bottom:.4rem;margin-bottom:.8rem}
-  /* Evita interruzioni di pagina nelle tabelle */
+  .mastrino-header{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .mastrino-body{font-size:9px}
   tr{break-inside:avoid}
   @page{margin:1.2cm;size:A4}
 }
