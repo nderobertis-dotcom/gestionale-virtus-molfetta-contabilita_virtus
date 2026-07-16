@@ -177,16 +177,28 @@ tr:hover td{background:var(--bg)}
   .page.print-active{display:block!important}
   .content{overflow:visible!important;width:100%}
   .app{display:block}
-  body{background:#fff;font-size:11px;color:#000}
-  table{font-size:10px;width:100%}
+  body{background:#fff;font-size:10px;color:#000}
+  table{font-size:9px;width:100%}
   th{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .tbl-wrap{border:none;overflow:visible;box-shadow:none}
-  .metric{border:1px solid #ccc;break-inside:avoid}
-  .print-header{display:flex!important;justify-content:space-between;align-items:flex-start;
-    border-bottom:2px solid #1A1A2E;padding-bottom:.5rem;margin-bottom:1rem}
-  .mastrino{break-inside:avoid;margin-bottom:1rem}
+  .tbl-wrap{border:none;overflow:visible!important;box-shadow:none}
+  /* Metriche compatte su una riga */
+  .metrics{display:flex!important;flex-wrap:nowrap!important;gap:.3rem!important;margin-bottom:.5rem!important}
+  .metric{flex:1;border:1px solid #ccc;padding:.3rem .5rem!important;break-inside:avoid;min-width:0}
+  .metric-label{font-size:7px!important;margin-bottom:.1rem!important}
+  .metric-value{font-size:13px!important}
+  /* Grid a due colonne → colonna singola in stampa */
+  .sp-grid{display:block!important}
+  .sp-grid > *{margin-bottom:.6rem}
+  /* Mastrini */
+  .mastrino{break-inside:avoid;margin-bottom:.8rem}
   .mastrino-header{background:#1A1A2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  @page{margin:1.5cm;size:A4}
+  .mastrino-body{font-size:9px}
+  /* Header stampa */
+  .print-header{display:flex!important;justify-content:space-between;align-items:flex-start;
+    border-bottom:2px solid #1A1A2E;padding-bottom:.4rem;margin-bottom:.8rem}
+  /* Evita interruzioni di pagina nelle tabelle */
+  tr{break-inside:avoid}
+  @page{margin:1.2cm;size:A4}
 }
 .print-header{display:none}
 </style>
@@ -1475,7 +1487,7 @@ function buildContoEconomico(){
       <div class="metric"><div class="metric-label">Totale Costi</div><div class="metric-value" style="color:var(--costo)">${fmt(totCosti)}</div></div>
       <div class="metric"><div class="metric-label">Risultato di Esercizio</div><div class="metric-value ${risultato>=0?'avere':'dare'}">${fmt(risultato)}</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <div class="sp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       <div class="tbl-wrap">
         ${renderSezione(ricavi,'Ricavi','var(--ricavo)')}
       </div>
@@ -1542,7 +1554,7 @@ function buildSituazionePatrimoniale(){
       <div class="metric"><div class="metric-label">Patrimonio Netto</div><div class="metric-value" style="color:${totPat>=0?'var(--ricavo)':'var(--costo)'}">${fmt(totPat)}</div></div>
       <div class="metric"><div class="metric-label">Equilibrio</div><div class="metric-value" style="color:${Math.abs(totAtt-(totPass+totPat))<0.01?'var(--ricavo)':'var(--costo)'}">${Math.abs(totAtt-(totPass+totPat))<0.01?'✅ OK':'⚠️'}</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <div class="sp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       ${renderCol(attivita,'ATTIVITÀ (Classe 1)','var(--ricavo)')}
       <div>
         ${renderCol(passivita,'PASSIVITÀ (Classe 2)','var(--costo)')}
