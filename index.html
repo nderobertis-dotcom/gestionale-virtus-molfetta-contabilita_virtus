@@ -2914,7 +2914,7 @@ function apriModalUploadFattura(){
 async function salvaFatturaPDF(){
   const file = document.getElementById('uf-file').files[0];
   if(!file){ alert('Seleziona un file PDF.'); return; }
-  if(file.size > 1500000){ alert('File troppo grande (max 1.5MB). Comprimi il PDF prima di caricarlo.'); return; }
+  // Nessun limite fisso — usa chunk per file grandi
 
   const soc      = document.getElementById('uf-soc').value;
   const nr       = document.getElementById('uf-nr').value.trim();
@@ -2942,14 +2942,7 @@ async function salvaFatturaPDF(){
     // Salva in Firestore (se > 900KB usa subcollection per il PDF)
     const meta = { soc, nr, cliente, data, importo, anno, nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||'' };
 
-    if(b64.length > 900000){
-      // Documento grande: salva meta + PDF in subcollection
-      const docRef = await FA_REF().add(meta);
-      await docRef.collection('pdf').doc('file').set({b64, nomeFile:file.name});
-    } else {
-      // Documento piccolo: tutto insieme
-      await FA_REF().add({...meta, b64, nomeFile:file.name});
-    }
+    await salvaPDFaChunk(FA_REF(), meta, b64, file.name);
 
     bar.style.width = '100%';
     txt.textContent = 'Caricato!';
@@ -3031,7 +3024,7 @@ function apriModalUploadContratto(){
 async function salvaContrattoPDF(){
   const file = document.getElementById('uc-file').files[0];
   if(!file){ alert('Seleziona un file PDF.'); return; }
-  if(file.size > 2000000){ alert('File troppo grande (max 2MB).'); return; }
+  // Nessun limite fisso — usa chunk per file grandi
 
   const soc     = document.getElementById('uc-soc').value;
   const tipo    = document.getElementById('uc-tipo').value;
@@ -3056,12 +3049,7 @@ async function salvaContrattoPDF(){
 
     const meta = { soc, tipo, nome, data, stagione, note, nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDa:window._currentUser?.nome||'' };
 
-    if(b64.length > 900000){
-      const docRef = await CON_REF().add(meta);
-      await docRef.collection('pdf').doc('file').set({b64, nomeFile:file.name});
-    } else {
-      await CON_REF().add({...meta, b64, nomeFile:file.name});
-    }
+    await salvaPDFaChunk(CON_REF(), meta, b64, file.name);
 
     bar.style.width = '100%';
     txt.textContent = 'Caricato!';
@@ -3078,12 +3066,7 @@ async function apriPDF(id, tipo){
     const ref  = tipo==='fattura' ? FA_REF().doc(id) : CON_REF().doc(id);
     const snap = await ref.get();
     if(!snap.exists){ alert('Documento non trovato.'); return; }
-    let b64 = snap.data().b64;
-    if(!b64){
-      // Cerca nella subcollection
-      const subSnap = await ref.collection('pdf').doc('file').get();
-      if(subSnap.exists) b64 = subSnap.data().b64;
-    }
+    let b64 = await leggiPDFaChunk(ref, snap);
     if(!b64){ alert('PDF non trovato.'); return; }
     // Apri in nuova tab
     const byteStr = atob(b64.split(',')[1]||b64);
@@ -3104,6 +3087,45 @@ async function eliminaDoc(id, tipo){
   await ref.delete();
   if(tipo==='fattura') caricaFattureAttive();
   else caricaContrattiDoc();
+}
+
+
+// ── SALVATAGGIO PDF A CHUNK (per file grandi) ──
+const CHUNK_SIZE = 700000; // 700KB per chunk — sotto il limite Firestore
+
+async function salvaPDFaChunk(collRef, meta, b64, nomeFile){
+  const nChunk = Math.ceil(b64.length / CHUNK_SIZE);
+  const docRef = await collRef.add({...meta, nomeFile, nChunk, usaChunk: nChunk > 1});
+  if(nChunk === 1){
+    // File piccolo — salva direttamente nel documento
+    await docRef.update({b64});
+  } else {
+    // File grande — salva in chunk separati
+    for(let i=0; i<nChunk; i++){
+      const chunk = b64.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE);
+      await docRef.collection('chunks').doc('chunk_'+i).set({data:chunk, idx:i});
+    }
+  }
+  return docRef;
+}
+
+async function leggiPDFaChunk(ref, snap){
+  const data = snap.data();
+  if(data.b64) return data.b64; // file piccolo salvato direttamente
+  if(!data.usaChunk && !data.nChunk){
+    // Vecchio sistema subcollection
+    const subSnap = await ref.collection('pdf').doc('file').get();
+    if(subSnap.exists) return subSnap.data().b64;
+    return null;
+  }
+  // Ricostruisci da chunk
+  const nChunk = data.nChunk || 1;
+  const chunks = [];
+  for(let i=0; i<nChunk; i++){
+    const cs = await ref.collection('chunks').doc('chunk_'+i).get();
+    if(cs.exists) chunks.push(cs.data().data);
+  }
+  return chunks.join('');
 }
 
 // ── UTILITY ──
