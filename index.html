@@ -491,10 +491,13 @@ tr:hover td{background:var(--bg)}
         <select id="scad-mese" class="form-input" style="width:auto" onchange="buildScadenzario()">
           <option value="">Tutti i mesi</option>
         </select>
-        <select id="scad-tipo" class="form-input" style="width:auto" onchange="buildScadenzario()">
+        <select id="scad-tipo" class="form-input" style="width:auto" onchange="aggiorniFiltroControparte();buildScadenzario()">
           <option value="">Tutti</option>
           <option value="credito">Crediti</option>
           <option value="debito">Debiti</option>
+        </select>
+        <select id="scad-controparte" class="form-input" style="width:auto;max-width:220px" onchange="buildScadenzario()">
+          <option value="">Tutte le voci</option>
         </select>
         <select id="scad-stato" class="form-input" style="width:auto" onchange="buildScadenzario()">
           <option value="">Tutti gli stati</option>
@@ -1977,6 +1980,37 @@ async function confermaSaldaConPN(){
 // ══════════════════════════════════════════════════════════════
 // SCADENZARIO
 // ══════════════════════════════════════════════════════════════
+function aggiorniFiltroControparte(){
+  const filtTipo = document.getElementById('scad-tipo')?.value||'';
+  const filtSoc  = document.getElementById('scad-soc')?.value||'';
+  const sel = document.getElementById('scad-controparte');
+  if(!sel) return;
+  const val = sel.value; // preserva selezione corrente
+  // Raccoglie controparti uniche dai piani (una voce per piano)
+  const viste = new Set();
+  const opts = [['','Tutte le voci']];
+  pianiRateazione.forEach(piano=>{
+    if(filtTipo && piano.tipo!==(filtTipo==='credito'?'incasso':'pagamento')) return;
+    if(filtSoc  && piano.soc!==filtSoc) return;
+    const key = piano.contoId+'|'+piano.desc;
+    if(!viste.has(key)){
+      viste.add(key);
+      opts.push([key, getNomeContoById(piano.contoId)+' — '+piano.desc]);
+    }
+  });
+  // Aggiungi anche voci scadenzario senza piano
+  scadenzario.filter(s=>!s.pianoId).forEach(s=>{
+    if(filtTipo && s.tipo!==filtTipo) return;
+    if(filtSoc  && s.soc!==filtSoc) return;
+    const key = s.contoId+'|'+s.controparte;
+    if(!viste.has(key)){
+      viste.add(key);
+      opts.push([key, getNomeContoById(s.contoId)+' — '+s.controparte]);
+    }
+  });
+  sel.innerHTML = opts.map(([v,l])=>`<option value="${v}"${v===val?'selected':''}>${l}</option>`).join('');
+}
+
 function buildScadenzario(){
   // Popola il select mesi se vuoto
   const selMese = document.getElementById('scad-mese');
@@ -1995,16 +2029,24 @@ function buildScadenzario(){
     });
   }
 
-  const filtSoc  = document.getElementById('scad-soc')?.value||'';
-  const filtMese = document.getElementById('scad-mese')?.value||'';
-  const filtTipo = document.getElementById('scad-tipo')?.value||'';
-  const filtStat = document.getElementById('scad-stato')?.value||'';
+  const filtSoc       = document.getElementById('scad-soc')?.value||'';
+  const filtMese      = document.getElementById('scad-mese')?.value||'';
+  const filtTipo      = document.getElementById('scad-tipo')?.value||'';
+  const filtControparte = document.getElementById('scad-controparte')?.value||'';
+  const filtStat      = document.getElementById('scad-stato')?.value||'';
+
+  // Aggiorna dropdown controparte
+  aggiorniFiltroControparte();
   const oggi = new Date().toISOString().slice(0,10);
 
   let voci = scadenzario.filter(s=>{
     if(filtSoc  && s.soc!==filtSoc)   return false;
     if(filtMese && (!s.scadenza||!s.scadenza.startsWith(filtMese))) return false;
     if(filtTipo && s.tipo!==filtTipo) return false;
+    if(filtControparte){
+      const key = s.contoId+'|'+s.controparte;
+      if(key !== filtControparte) return false;
+    }
     if(filtStat){
       const stato = s.saldato>=(s.importo-0.01)?'pagato':s.scadenza<oggi?'scaduto':'aperto';
       if(stato!==filtStat) return false;
