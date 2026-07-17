@@ -283,6 +283,95 @@ tr:hover td{background:var(--bg)}
       <div id="home-societa" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:1rem"></div>
     </div>
 
+
+    <!-- ── PAGINA BENVENUTO (hub principale) ── -->
+    <div id="page-benvenuto" class="page">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:2rem;padding:2rem">
+        <div style="text-align:center;margin-bottom:1rem">
+          <div style="display:flex;gap:1.5rem;justify-content:center;margin-bottom:1.2rem">
+            <img src="" id="benv-logo-v" style="width:70px;height:70px;border-radius:50%;object-fit:cover;border:3px solid #E0E0E0">
+            <img src="" id="benv-logo-d" style="width:70px;height:70px;border-radius:50%;object-fit:cover;border:3px solid #E0E0E0">
+            <img src="" id="benv-logo-i" style="width:70px;height:70px;border-radius:50%;object-fit:cover;border:3px solid #E0E0E0">
+          </div>
+          <div style="font-size:26px;font-weight:800;color:var(--text1)">Gruppo Virtus Molfetta</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:.3rem">Stagione 2026/2027</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;width:100%;max-width:750px">
+          <!-- CONTABILITÀ -->
+          <div onclick="apriModulo('contabilita')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#0D3B6E';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="font-size:2.5rem;margin-bottom:.8rem">📒</div>
+            <div style="font-size:15px;font-weight:800;color:#0D3B6E">Contabilità</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Prima Nota · Mastrini · Bilancio · Scadenzario</div>
+          </div>
+          <!-- FATTURE ATTIVE -->
+          <div onclick="apriModulo('fatture-attive')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#1A5C38';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="font-size:2.5rem;margin-bottom:.8rem">🧾</div>
+            <div style="font-size:15px;font-weight:800;color:#1A5C38">Fatture Attive</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Archivio PDF fatture emesse</div>
+          </div>
+          <!-- CONTRATTI -->
+          <div onclick="apriModulo('contratti-doc')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#6B3A00';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="font-size:2.5rem;margin-bottom:.8rem">📄</div>
+            <div style="font-size:15px;font-weight:800;color:#6B3A00">Contratti</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Sponsorizzazioni · Staff · Roster</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1rem" id="benv-user-info"></div>
+      </div>
+    </div>
+
+    <!-- ── FATTURE ATTIVE ── -->
+    <div id="page-fatture-attive" class="page">
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:.8rem">
+          <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
+          <div>
+            <div class="page-title">🧾 Fatture Attive</div>
+            <div class="page-sub">Archivio PDF fatture emesse — Caricamento riservato agli Admin</div>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar no-print">
+        <select id="fa-filter-soc" class="form-input" style="width:auto" onchange="buildFattureAttive()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <select id="fa-filter-anno" class="form-input" style="width:auto" onchange="buildFattureAttive()">
+          <option value="">Tutti gli anni</option>
+          <option>2026</option><option>2027</option>
+        </select>
+        <input type="text" id="fa-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildFattureAttive()">
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalUploadFattura()">+ Carica Fattura PDF</button>
+      </div>
+      <div id="fa-container"></div>
+    </div>
+
+    <!-- ── CONTRATTI DOCUMENTI ── -->
+    <div id="page-contratti-doc" class="page">
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:.8rem">
+          <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
+          <div>
+            <div class="page-title">📄 Contratti</div>
+            <div class="page-sub">Sponsorizzazioni · Staff · Roster — Caricamento riservato agli Admin</div>
+          </div>
+        </div>
+      </div>
+      <div class="no-print" style="display:flex;gap:.5rem;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:.5rem">
+        <button id="tab-sponsorship" class="btn btn-dark" onclick="switchContratti('sponsorship')">🤝 Sponsorizzazioni</button>
+        <button id="tab-staff" class="btn" onclick="switchContratti('staff')">👥 Staff</button>
+        <button id="tab-roster" class="btn" onclick="switchContratti('roster')">🏀 Roster</button>
+      </div>
+      <div class="toolbar no-print">
+        <select id="co-filter-soc" class="form-input" style="width:auto" onchange="buildContrattiDoc()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <input type="text" id="co-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildContrattiDoc()">
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalUploadContratto()">+ Carica Contratto PDF</button>
+      </div>
+      <div id="co-container"></div>
+    </div>
     <!-- PRIMA NOTA -->
     <div id="page-primanota" class="page">
       <div class="page-header">
@@ -2506,7 +2595,19 @@ auth.onAuthStateChanged(async function(user){
       renderPianoConti();
       aggiornaDatalist();
       buildHome();
-      showPage('home', document.getElementById('nav-home'));
+      // Mostra pagina di benvenuto
+      document.querySelector('.sidebar').style.display = 'none';
+      showPage('benvenuto', null);
+      setTimeout(()=>{
+        const bv = document.getElementById('benv-logo-v');
+        const bd = document.getElementById('benv-logo-d');
+        const bi = document.getElementById('benv-logo-i');
+        if(bv) bv.src = LOGO['VIRTUS']||'';
+        if(bd) bd.src = LOGO['DINAMO']||'';
+        if(bi) bi.src = LOGO['INVICTA']||'';
+        const info = document.getElementById('benv-user-info');
+        if(info) info.textContent = 'Accesso come '+profilo.nome+' · '+(profilo.ruolo||'').toUpperCase()+' · '+new Date().toLocaleDateString('it-IT');
+      }, 100);
     }catch(e){
       document.getElementById('login-err').textContent='Errore: '+e.message;
     }
@@ -2616,5 +2717,402 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+
+<!-- MODAL UPLOAD FATTURA PDF -->
+<div class="modal-overlay" id="modal-upload-fattura" onclick="if(event.target===this)chiudiModal('modal-upload-fattura')">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">🧾 Carica Fattura PDF</div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Società</label>
+        <select class="form-input" id="uf-soc">
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Anno</label>
+        <select class="form-input" id="uf-anno">
+          <option>2026</option><option>2027</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Nr. Fattura</label>
+      <input type="text" class="form-input" id="uf-nr" placeholder="es. FT 001/2026">
+    </div>
+    <div class="form-row"><label class="form-label">Cliente / Sponsor</label>
+      <input type="text" class="form-input" id="uf-cliente" placeholder="Nome cliente...">
+    </div>
+    <div class="form-row"><label class="form-label">Data fattura</label>
+      <input type="date" class="form-input" id="uf-data">
+    </div>
+    <div class="form-row"><label class="form-label">Importo € (opzionale)</label>
+      <input type="number" class="form-input" id="uf-importo" placeholder="0">
+    </div>
+    <div class="form-row"><label class="form-label">File PDF</label>
+      <input type="file" class="form-input" id="uf-file" accept=".pdf" onchange="anteprima PDF upload('uf-file','uf-preview')">
+      <div id="uf-preview" style="margin-top:.4rem;font-size:11px;color:var(--text2)"></div>
+    </div>
+    <div id="uf-progress" style="display:none;margin:.5rem 0">
+      <div style="background:var(--bg3);border-radius:4px;height:6px">
+        <div id="uf-progress-bar" style="background:var(--verde);height:6px;border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+      <div id="uf-progress-txt" style="font-size:10px;color:var(--text2);margin-top:.2rem">Caricamento...</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-upload-fattura')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaFatturaPDF()">Carica</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL UPLOAD CONTRATTO PDF -->
+<div class="modal-overlay" id="modal-upload-contratto" onclick="if(event.target===this)chiudiModal('modal-upload-contratto')">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">📄 Carica Contratto PDF</div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Società</label>
+        <select class="form-input" id="uc-soc">
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Tipo</label>
+        <select class="form-input" id="uc-tipo">
+          <option value="sponsorship">Sponsorizzazione</option>
+          <option value="staff">Staff</option>
+          <option value="roster">Roster</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Nome controparte</label>
+      <input type="text" class="form-input" id="uc-nome" placeholder="es. Farmacia Rossi / Mario Rossi">
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Data firma</label>
+        <input type="date" class="form-input" id="uc-data">
+      </div>
+      <div class="form-row"><label class="form-label">Stagione</label>
+        <input type="text" class="form-input" id="uc-stagione" value="2026/2027">
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Note</label>
+      <input type="text" class="form-input" id="uc-note" placeholder="Note aggiuntive...">
+    </div>
+    <div class="form-row"><label class="form-label">File PDF</label>
+      <input type="file" class="form-input" id="uc-file" accept=".pdf">
+      <div id="uc-preview" style="margin-top:.4rem;font-size:11px;color:var(--text2)"></div>
+    </div>
+    <div id="uc-progress" style="display:none;margin:.5rem 0">
+      <div style="background:var(--bg3);border-radius:4px;height:6px">
+        <div id="uc-progress-bar" style="background:var(--verde);height:6px;border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+      <div id="uc-progress-txt" style="font-size:10px;color:var(--text2);margin-top:.2rem">Caricamento...</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-upload-contratto')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaContrattoPDF()">Carica</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
+<script>
+// ══════════════════════════════════════════════════════════════
+// DATI DOCUMENTI (Firestore collections separate)
+// ══════════════════════════════════════════════════════════════
+let fattureAttive = [];
+let contrattiDoc  = [];
+let _tabContratti = 'sponsorship';
+
+const FA_REF  = () => db.collection('fatture_attive');
+const CON_REF = () => db.collection('contratti_doc');
+
+// ── NAVIGAZIONE MODULI ──
+function apriModulo(modulo){
+  // Nascondi/mostra sidebar in base al modulo
+  const sidebar = document.querySelector('.sidebar');
+  if(modulo === 'benvenuto'){
+    sidebar.style.display = 'none';
+    showPage('benvenuto', null);
+    // Aggiorna loghi e info utente
+    document.getElementById('benv-logo-v').src = LOGO['VIRTUS']||'';
+    document.getElementById('benv-logo-d').src = LOGO['DINAMO']||'';
+    document.getElementById('benv-logo-i').src = LOGO['INVICTA']||'';
+    const info = document.getElementById('benv-user-info');
+    if(info && window._currentUser) info.textContent = 'Accesso come ' + window._currentUser.nome + ' · ' + (window.currentRuolo||'').toUpperCase();
+  } else if(modulo === 'contabilita'){
+    sidebar.style.display = '';
+    showPage('home', document.getElementById('nav-home'));
+  } else if(modulo === 'fatture-attive'){
+    sidebar.style.display = 'none';
+    caricaFattureAttive();
+    showPage('fatture-attive', null);
+  } else if(modulo === 'contratti-doc'){
+    sidebar.style.display = 'none';
+    caricaContrattiDoc();
+    showPage('contratti-doc', null);
+  }
+}
+
+// ── FATTURE ATTIVE ──
+async function caricaFattureAttive(){
+  try{
+    const snap = await FA_REF().orderBy('data','desc').get();
+    fattureAttive = snap.docs.map(d=>({id:d.id,...d.data()}));
+    buildFattureAttive();
+  }catch(e){ console.error('Fatture attive:',e.message); }
+}
+
+function buildFattureAttive(){
+  const filtSoc  = document.getElementById('fa-filter-soc')?.value||'';
+  const filtAnno = document.getElementById('fa-filter-anno')?.value||'';
+  const search   = document.getElementById('fa-search')?.value?.toLowerCase()||'';
+  const isAdmin  = window.currentRuolo==='admin';
+
+  let lista = fattureAttive.filter(f=>{
+    if(filtSoc  && f.soc!==filtSoc) return false;
+    if(filtAnno && f.anno!==filtAnno) return false;
+    if(search   && !f.cliente?.toLowerCase().includes(search) && !f.nr?.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const cont = document.getElementById('fa-container');
+  if(!cont) return;
+
+  if(!lista.length){
+    cont.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuna fattura caricata</div>';
+    return;
+  }
+
+  cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+    <thead><tr>
+      <th>Soc.</th><th>Nr. Fattura</th><th>Data</th><th>Cliente</th>
+      <th style="text-align:right">Importo</th><th>Anno</th><th>PDF</th>
+      ${isAdmin?'<th></th>':''}
+    </tr></thead>
+    <tbody>${lista.map(f=>`<tr>
+      <td><span class="badge-soc badge-${f.soc?.[0]?.toLowerCase()}">${f.soc}</span></td>
+      <td style="font-weight:600">${f.nr||'—'}</td>
+      <td style="white-space:nowrap">${fmtData(f.data)}</td>
+      <td>${f.cliente||'—'}</td>
+      <td class="num">${f.importo?fmt(f.importo):'—'}</td>
+      <td>${f.anno||'—'}</td>
+      <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button></td>
+      ${isAdmin?`<td><button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function apriModalUploadFattura(){
+  document.getElementById('uf-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('uf-nr').value = '';
+  document.getElementById('uf-cliente').value = '';
+  document.getElementById('uf-importo').value = '';
+  document.getElementById('uf-preview').textContent = '';
+  document.getElementById('uf-progress').style.display = 'none';
+  apriModal('modal-upload-fattura');
+}
+
+async function salvaFatturaPDF(){
+  const file = document.getElementById('uf-file').files[0];
+  if(!file){ alert('Seleziona un file PDF.'); return; }
+  if(file.size > 1500000){ alert('File troppo grande (max 1.5MB). Comprimi il PDF prima di caricarlo.'); return; }
+
+  const soc      = document.getElementById('uf-soc').value;
+  const nr       = document.getElementById('uf-nr').value.trim();
+  const cliente  = document.getElementById('uf-cliente').value.trim();
+  const data     = document.getElementById('uf-data').value;
+  const importo  = parseFloat(document.getElementById('uf-importo').value)||0;
+  const anno     = document.getElementById('uf-anno').value;
+
+  if(!nr||!cliente){ alert('Inserisci numero fattura e cliente.'); return; }
+
+  // Progress
+  const prog = document.getElementById('uf-progress');
+  const bar  = document.getElementById('uf-progress-bar');
+  const txt  = document.getElementById('uf-progress-txt');
+  prog.style.display = 'block';
+  bar.style.width = '30%';
+  txt.textContent = 'Lettura file...';
+
+  try{
+    // Leggi PDF come base64
+    const b64 = await fileToBase64(file);
+    bar.style.width = '60%';
+    txt.textContent = 'Salvataggio su cloud...';
+
+    // Salva in Firestore (se > 900KB usa subcollection per il PDF)
+    const meta = { soc, nr, cliente, data, importo, anno, nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||'' };
+
+    if(b64.length > 900000){
+      // Documento grande: salva meta + PDF in subcollection
+      const docRef = await FA_REF().add(meta);
+      await docRef.collection('pdf').doc('file').set({b64, nomeFile:file.name});
+    } else {
+      // Documento piccolo: tutto insieme
+      await FA_REF().add({...meta, b64, nomeFile:file.name});
+    }
+
+    bar.style.width = '100%';
+    txt.textContent = 'Caricato!';
+    setTimeout(()=>{ chiudiModal('modal-upload-fattura'); caricaFattureAttive(); }, 800);
+  }catch(e){
+    alert('Errore: '+e.message);
+    prog.style.display = 'none';
+  }
+}
+
+// ── CONTRATTI ──
+async function caricaContrattiDoc(){
+  try{
+    const snap = await CON_REF().orderBy('data','desc').get();
+    contrattiDoc = snap.docs.map(d=>({id:d.id,...d.data()}));
+    buildContrattiDoc();
+  }catch(e){ console.error('Contratti:',e.message); }
+}
+
+function switchContratti(tab){
+  _tabContratti = tab;
+  ['sponsorship','staff','roster'].forEach(t=>{
+    const btn = document.getElementById('tab-'+t);
+    if(btn){ btn.className = t===tab ? 'btn btn-dark' : 'btn'; }
+  });
+  buildContrattiDoc();
+}
+
+function buildContrattiDoc(){
+  const filtSoc = document.getElementById('co-filter-soc')?.value||'';
+  const search  = document.getElementById('co-search')?.value?.toLowerCase()||'';
+  const isAdmin = window.currentRuolo==='admin';
+
+  let lista = contrattiDoc.filter(c=>{
+    if(c.tipo !== _tabContratti) return false;
+    if(filtSoc && c.soc!==filtSoc) return false;
+    if(search  && !c.nome?.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const cont = document.getElementById('co-container');
+  if(!cont) return;
+
+  const titoliTab = {sponsorship:'Sponsorizzazioni',staff:'Contratti Staff',roster:'Roster'};
+
+  if(!lista.length){
+    cont.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--text3)">Nessun contratto in "${titoliTab[_tabContratti]}"</div>`;
+    return;
+  }
+
+  cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+    <thead><tr>
+      <th>Soc.</th><th>Controparte</th><th>Data firma</th>
+      <th>Stagione</th><th>Note</th><th>PDF</th>
+      ${isAdmin?'<th></th>':''}
+    </tr></thead>
+    <tbody>${lista.map(c=>`<tr>
+      <td><span class="badge-soc badge-${c.soc?.[0]?.toLowerCase()}">${c.soc}</span></td>
+      <td style="font-weight:600">${c.nome||'—'}</td>
+      <td style="white-space:nowrap">${fmtData(c.data)}</td>
+      <td>${c.stagione||'—'}</td>
+      <td style="font-size:11px;color:var(--text2)">${c.note||'—'}</td>
+      <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${c.id}','contratto')">📄 Apri</button></td>
+      ${isAdmin?`<td><button class="btn-del" onclick="eliminaDoc('${c.id}','contratto')">✕</button></td>`:''}
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function apriModalUploadContratto(){
+  document.getElementById('uc-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('uc-nome').value = '';
+  document.getElementById('uc-note').value = '';
+  document.getElementById('uc-tipo').value = _tabContratti;
+  document.getElementById('uc-preview').textContent = '';
+  document.getElementById('uc-progress').style.display = 'none';
+  apriModal('modal-upload-contratto');
+}
+
+async function salvaContrattoPDF(){
+  const file = document.getElementById('uc-file').files[0];
+  if(!file){ alert('Seleziona un file PDF.'); return; }
+  if(file.size > 2000000){ alert('File troppo grande (max 2MB).'); return; }
+
+  const soc     = document.getElementById('uc-soc').value;
+  const tipo    = document.getElementById('uc-tipo').value;
+  const nome    = document.getElementById('uc-nome').value.trim();
+  const data    = document.getElementById('uc-data').value;
+  const stagione= document.getElementById('uc-stagione').value;
+  const note    = document.getElementById('uc-note').value.trim();
+
+  if(!nome){ alert('Inserisci il nome della controparte.'); return; }
+
+  const prog = document.getElementById('uc-progress');
+  const bar  = document.getElementById('uc-progress-bar');
+  const txt  = document.getElementById('uc-progress-txt');
+  prog.style.display = 'block';
+  bar.style.width = '30%';
+  txt.textContent = 'Lettura file...';
+
+  try{
+    const b64 = await fileToBase64(file);
+    bar.style.width = '60%';
+    txt.textContent = 'Salvataggio su cloud...';
+
+    const meta = { soc, tipo, nome, data, stagione, note, nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDa:window._currentUser?.nome||'' };
+
+    if(b64.length > 900000){
+      const docRef = await CON_REF().add(meta);
+      await docRef.collection('pdf').doc('file').set({b64, nomeFile:file.name});
+    } else {
+      await CON_REF().add({...meta, b64, nomeFile:file.name});
+    }
+
+    bar.style.width = '100%';
+    txt.textContent = 'Caricato!';
+    setTimeout(()=>{ chiudiModal('modal-upload-contratto'); caricaContrattiDoc(); }, 800);
+  }catch(e){
+    alert('Errore: '+e.message);
+    prog.style.display = 'none';
+  }
+}
+
+// ── APRI PDF ──
+async function apriPDF(id, tipo){
+  try{
+    const ref  = tipo==='fattura' ? FA_REF().doc(id) : CON_REF().doc(id);
+    const snap = await ref.get();
+    if(!snap.exists){ alert('Documento non trovato.'); return; }
+    let b64 = snap.data().b64;
+    if(!b64){
+      // Cerca nella subcollection
+      const subSnap = await ref.collection('pdf').doc('file').get();
+      if(subSnap.exists) b64 = subSnap.data().b64;
+    }
+    if(!b64){ alert('PDF non trovato.'); return; }
+    // Apri in nuova tab
+    const byteStr = atob(b64.split(',')[1]||b64);
+    const ab = new ArrayBuffer(byteStr.length);
+    const ia = new Uint8Array(ab);
+    for(let i=0;i<byteStr.length;i++) ia[i]=byteStr.charCodeAt(i);
+    const blob = new Blob([ab],{type:'application/pdf'});
+    const url  = URL.createObjectURL(blob);
+    window.open(url,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }catch(e){ alert('Errore apertura PDF: '+e.message); }
+}
+
+// ── ELIMINA DOCUMENTO ──
+async function eliminaDoc(id, tipo){
+  if(!confirm('Eliminare questo documento?')) return;
+  const ref = tipo==='fattura' ? FA_REF().doc(id) : CON_REF().doc(id);
+  await ref.delete();
+  if(tipo==='fattura') caricaFattureAttive();
+  else caricaContrattiDoc();
+}
+
+// ── UTILITY ──
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload  = ()=>res(r.result);
+    r.onerror = ()=>rej(new Error('Errore lettura file'));
+    r.readAsDataURL(file);
+  });
+}
+</script>
