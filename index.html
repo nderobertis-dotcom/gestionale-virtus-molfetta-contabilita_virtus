@@ -2033,7 +2033,11 @@ function aggiorniFiltroControparte(){
 }
 
 function buildScadenzario(){
-  // Popola il select mesi se vuoto
+  // Reset toolbar massiva
+  const _bt = document.getElementById('scad-bulk-toolbar');
+  if(_bt) _bt.style.display = 'none';
+  const _ca = document.getElementById('scad-check-all');
+  if(_ca) _ca.checked = false;
   const selMese = document.getElementById('scad-mese');
   if(selMese && selMese.options.length<=1){
     // Stagione luglio 2026 - giugno 2027
