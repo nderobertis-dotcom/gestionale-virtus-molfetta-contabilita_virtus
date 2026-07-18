@@ -507,15 +507,35 @@ tr:hover td{background:var(--bg)}
           <option value="pagato">Saldato</option>
         </select>
       </div>
+      <!-- Toolbar modifica massiva -->
+      <div id="scad-bulk-toolbar" style="display:none;background:#1A1A2E;border-radius:8px;padding:.6rem 1rem;margin-bottom:.6rem;display:none;align-items:center;gap:.8rem;flex-wrap:wrap">
+        <span id="scad-bulk-count" style="color:#fff;font-size:11px;font-weight:700;min-width:80px"></span>
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <span style="color:rgba(255,255,255,.7);font-size:11px">Sposta di</span>
+          <input type="number" id="bulk-giorni" class="form-input" style="width:60px;font-size:11px;padding:4px 6px" placeholder="0">
+          <select id="bulk-unita" class="form-input" style="font-size:11px;padding:4px 6px;width:auto">
+            <option value="giorni">giorni</option>
+            <option value="mesi">mesi</option>
+          </select>
+          <button class="btn" style="font-size:10px;padding:3px 10px;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)" onclick="bulkSpostaDate()">📅 Applica</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <span style="color:rgba(255,255,255,.7);font-size:11px">Importo €</span>
+          <input type="number" id="bulk-importo" class="form-input" style="width:90px;font-size:11px;padding:4px 6px" placeholder="nuovo imp.">
+          <button class="btn" style="font-size:10px;padding:3px 10px;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)" onclick="bulkCambiaImporto()">💰 Applica</button>
+        </div>
+        <button class="btn-del" style="margin-left:auto;font-size:10px;padding:3px 10px" onclick="deselezionaTutte()">✕ Deseleziona</button>
+      </div>
       <div class="metrics" id="scad-metrics"></div>
       <div class="tbl-wrap scrollx" style="margin-top:.8rem">
         <table>
           <thead>
             <tr>
+              <th style="width:32px"><input type="checkbox" id="scad-check-all" onchange="selezionaTutte(this.checked)" title="Seleziona/deseleziona tutte"></th>
               <th>Scadenza</th><th>Soc.</th><th>Tipo</th><th>Controparte</th>
               <th>Conto</th><th style="text-align:right">Importo €</th>
               <th style="text-align:right">Saldato €</th>
-              <th>Stato</th><th>Note</th><th></th>
+              <th>Stato</th><th></th>
             </tr>
           </thead>
           <tbody id="tbody-scadenzario"></tbody>
@@ -2086,6 +2106,7 @@ function buildScadenzario(){
       corrente:'background:#FFF9C4;color:#F57F17',aperto:'background:#BBDEFB;color:#1565C0',
     };
     return `<tr>
+      <td><input type="checkbox" class="scad-check" data-id="${s.id}" data-piano="" onchange="aggiornaBulkToolbar()"></td>
       <td style="white-space:nowrap;${stato==='scaduto'?'color:var(--dare);font-weight:700':''}">${fmtData(s.scadenza)}</td>
       <td><span class="badge-soc badge-${s.soc?.[0]?.toLowerCase()}">${s.soc}</span></td>
       <td><span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;${s.tipo==='credito'?'background:#E8F5E9;color:var(--avere)':'background:#FFEBEE;color:var(--dare)'}">${s.tipo.toUpperCase()}</span></td>
@@ -2094,7 +2115,6 @@ function buildScadenzario(){
       <td class="num">${fmt(s.importo)}</td>
       <td class="num" style="color:var(--ricavo)">${s.saldato?fmt(s.saldato):'—'}</td>
       <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato==='aperto'?'FUTURO':stato==='corrente'?'QUESTO MESE':stato.toUpperCase()}</span></td>
-      <td style="font-size:10px;color:var(--text2)">${s.note||'—'}</td>
       <td style="white-space:nowrap">
         ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
       </td>
@@ -2121,8 +2141,9 @@ function buildScadenzario(){
     const isOpen = aperto?.dataset.open==='1';
 
     // Riga sommario piano
-    let html = `<tr style="cursor:pointer" onclick="togglePianoScad('${pianoId}')">
-      <td style="white-space:nowrap;font-size:11px;color:var(--text2)">${rate.length} rate · ${fmtData(rate[0]?.scadenza)} → ${fmtData(rate[rate.length-1]?.scadenza)}</td>
+    let html = `<tr style="cursor:pointer">
+      <td><input type="checkbox" class="scad-check-piano" data-piano="${pianoId}" onchange="selezionaPiano(this,'${pianoId}')" title="Seleziona tutte le rate di questo piano"></td>
+      <td style="white-space:nowrap;font-size:11px;color:var(--text2)" onclick="togglePianoScad('${pianoId}')">${rate.length} rate · ${fmtData(rate[0]?.scadenza)} → ${fmtData(rate[rate.length-1]?.scadenza)}</td>
       <td><span class="badge-soc badge-${prima.soc?.[0]?.toLowerCase()}">${prima.soc}</span></td>
       <td><span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;${prima.tipo==='credito'?'background:#E8F5E9;color:var(--avere)':'background:#FFEBEE;color:var(--dare)'}">${prima.tipo.toUpperCase()}</span></td>
       <td>${prima.controparte}</td>
@@ -2145,6 +2166,7 @@ function buildScadenzario(){
       <td colspan="10" style="padding:0;background:var(--bg3)">
         <table style="width:100%;border-collapse:collapse;font-size:11px">
           <thead><tr style="background:#1A1A2E;color:#fff">
+            <th style="padding:5px 10px;width:32px"></th>
             <th style="padding:5px 10px">#</th>
             <th style="padding:5px 10px">Scadenza</th>
             <th style="padding:5px 10px;text-align:right">Importo</th>
@@ -2161,6 +2183,7 @@ function buildScadenzario(){
       const stClr = {pagato:'var(--ricavo)',scaduto:'var(--costo)',corrente:'#F57F17',aperto:'#1565C0'};
       const stLabel = {pagato:'✅ PAGATA'+(s.dataPagamento?' il '+fmtData(s.dataPagamento):''),scaduto:'⚠️ SCADUTA',corrente:'🔔 QUESTO MESE',aperto:'🔵 FUTURA'};
       html += `<tr style="border-bottom:.5px solid var(--border)">
+        <td style="padding:5px 10px"><input type="checkbox" class="scad-check" data-id="${s.id}" data-piano="${s.pianoId}" onchange="aggiornaBulkToolbar()"></td>
         <td style="padding:5px 10px;color:var(--text2)">${s.nRata}</td>
         <td style="padding:5px 10px">${fmtData(s.scadenza)}</td>
         <td style="padding:5px 10px;text-align:right">${fmt(s.importo)}</td>
@@ -2182,13 +2205,99 @@ function buildScadenzario(){
     voci_singole.map(s=>rigaSingola(s)).join('');
 }
 
+// ══════════════════════════════════════════════════════════════
+// MODIFICA MASSIVA SCADENZARIO
+// ══════════════════════════════════════════════════════════════
+function getCheckboxSelezionate(){
+  return [...document.querySelectorAll('.scad-check:checked')].map(cb=>cb.dataset.id).filter(Boolean);
+}
+
+function aggiornaBulkToolbar(){
+  const sel     = getCheckboxSelezionate();
+  const toolbar = document.getElementById('scad-bulk-toolbar');
+  const count   = document.getElementById('scad-bulk-count');
+  if(!toolbar) return;
+  if(sel.length > 0){
+    toolbar.style.display = 'flex';
+    count.textContent = sel.length + ' rata/e selezionate';
+  } else {
+    toolbar.style.display = 'none';
+  }
+}
+
+function selezionaTutte(checked){
+  document.querySelectorAll('.scad-check').forEach(cb=>{ cb.checked = checked; });
+  document.querySelectorAll('.scad-check-piano').forEach(cb=>{ cb.checked = checked; });
+  aggiornaBulkToolbar();
+}
+
+function selezionaPiano(checkbox, pianoId){
+  const checked = checkbox.checked;
+  document.querySelectorAll(`.scad-check[data-piano="${pianoId}"]`).forEach(cb=>{ cb.checked = checked; });
+  aggiornaBulkToolbar();
+}
+
+function deselezionaTutte(){
+  document.querySelectorAll('.scad-check,.scad-check-piano').forEach(cb=>{ cb.checked = false; });
+  const ca = document.getElementById('scad-check-all');
+  if(ca) ca.checked = false;
+  aggiornaBulkToolbar();
+}
+
+async function bulkSpostaDate(){
+  const ids = getCheckboxSelezionate();
+  if(!ids.length){ alert('Nessuna rata selezionata.'); return; }
+  const n     = parseInt(document.getElementById('bulk-giorni').value)||0;
+  const unita = document.getElementById('bulk-unita').value;
+  if(!n){ alert('Inserisci il numero di giorni o mesi da spostare.'); return; }
+  if(!confirm('Spostare '+ids.length+' rata/e di '+n+' '+unita+'?')) return;
+
+  ids.forEach(id=>{
+    const s = scadenzario.find(x=>x.id===id);
+    if(!s||!s.scadenza) return;
+    const d = new Date(s.scadenza);
+    if(unita==='giorni') d.setDate(d.getDate()+n);
+    else d.setMonth(d.getMonth()+n);
+    s.scadenza = d.toISOString().slice(0,10);
+    if(s.pianoId){
+      const piano = pianiRateazione.find(p=>p.id===s.pianoId);
+      if(piano){ const rata = piano.rate.find(r=>r.id===id); if(rata) rata.scadenza = s.scadenza; }
+    }
+  });
+
+  deselezionaTutte();
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario();
+}
+
+async function bulkCambiaImporto(){
+  const ids = getCheckboxSelezionate();
+  if(!ids.length){ alert('Nessuna rata selezionata.'); return; }
+  const importo = parseFloat(document.getElementById('bulk-importo').value);
+  if(!importo||importo<=0){ alert('Inserisci un importo valido.'); return; }
+  if(!confirm('Impostare '+fmt(importo)+' per '+ids.length+' rata/e?')) return;
+
+  ids.forEach(id=>{
+    const s = scadenzario.find(x=>x.id===id);
+    if(!s) return;
+    s.importo = importo;
+    if(s.pianoId){
+      const piano = pianiRateazione.find(p=>p.id===s.pianoId);
+      if(piano){ const rata = piano.rate.find(r=>r.id===id); if(rata) rata.importo = importo; }
+    }
+  });
+
+  deselezionaTutte();
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario();
+}
+
 function togglePianoScad(pianoId){
   const row = document.getElementById('scad-piano-open-'+pianoId);
   if(!row) return;
   const isOpen = row.dataset.open==='1';
   row.dataset.open = isOpen?'0':'1';
   row.style.display = isOpen?'none':'';
-  // Aggiorna l'icona nel pulsante della riga sopra
   buildScadenzario();
 }
 
