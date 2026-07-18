@@ -1687,6 +1687,27 @@ let _rateContext = null; // { regId, contoId, importoTot, tipo, soc, desc }
 let _righeRate   = [];
 let _saldaRataId = null;
 
+function bulkSpostaRateModal(){
+  const n     = parseInt(document.getElementById('bulk-rate-giorni').value)||0;
+  const unita = document.getElementById('bulk-rate-unita').value;
+  if(!n){ alert('Inserisci il numero di giorni o mesi.'); return; }
+  _righeRate.forEach(r=>{
+    if(!r.scadenza) return;
+    const d = new Date(r.scadenza);
+    if(unita==='giorni') d.setDate(d.getDate()+n);
+    else d.setMonth(d.getMonth()+n);
+    r.scadenza = d.toISOString().slice(0,10);
+  });
+  renderRigheRate();
+}
+
+function bulkImportoRateModal(){
+  const importo = parseFloat(document.getElementById('bulk-rate-importo').value);
+  if(!importo||importo<=0){ alert('Inserisci un importo valido.'); return; }
+  _righeRate.forEach(r=>{ r.importo = importo; });
+  renderRigheRate();
+}
+
 function apriModalRateazione(regId, contoId, override){
   const reg = registrazioni.find(r=>r.id===regId);
 
@@ -2823,6 +2844,24 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
     </div>
     <div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:.4rem">Rate (modificabili singolarmente)</div>
+    <!-- Controlli modifica massiva -->
+    <div style="background:var(--bg3);border-radius:6px;padding:.5rem .7rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <span style="font-size:10px;font-weight:700;color:var(--text2)">Modifica tutte:</span>
+      <div style="display:flex;align-items:center;gap:.3rem">
+        <span style="font-size:10px;color:var(--text2)">Sposta di</span>
+        <input type="number" id="bulk-rate-giorni" class="form-input" style="width:52px;font-size:11px;padding:3px 5px" placeholder="N">
+        <select id="bulk-rate-unita" class="form-input" style="font-size:11px;padding:3px 5px;width:auto">
+          <option value="giorni">giorni</option>
+          <option value="mesi">mesi</option>
+        </select>
+        <button class="btn" style="font-size:10px;padding:2px 8px" onclick="bulkSpostaRateModal()">Applica</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:.3rem">
+        <span style="font-size:10px;color:var(--text2)">Importo uguale</span>
+        <input type="number" id="bulk-rate-importo" class="form-input" style="width:80px;font-size:11px;padding:3px 5px" placeholder="€">
+        <button class="btn" style="font-size:10px;padding:2px 8px" onclick="bulkImportoRateModal()">Applica</button>
+      </div>
+    </div>
     <div style="max-height:320px;overflow-y:auto">
       <div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:.3rem;padding:.3rem .2rem;background:var(--bg);border-radius:4px;margin-bottom:.3rem">
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-align:center">#</div>
