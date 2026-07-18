@@ -2302,7 +2302,9 @@ function togglePianoScad(pianoId){
   const isOpen = row.dataset.open==='1';
   row.dataset.open = isOpen?'0':'1';
   row.style.display = isOpen?'none':'';
-  buildScadenzario();
+  // Aggiorna solo l'icona del pulsante — senza ricostruire tutta la tabella
+  const btn = document.querySelector(`[onclick*="togglePianoScad('${pianoId}')"] button`);
+  if(btn) btn.textContent = '📅 '+(isOpen?'▼':'▲');
 }
 
 function saldaScadenza(id){
