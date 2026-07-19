@@ -1451,12 +1451,15 @@ function buildMastrini(){
     const totAvere = movimenti.reduce((s,m)=>s+m.avere,0);
     const cl = parseInt(conto.classe||conto.codice?.split('.')[0]);
     const saldo = (cl===1||cl===4) ? totDare-totAvere : totAvere-totDare;
+    // Per cl 1,4: saldo>0 = Dare; Per cl 2,3,5: saldo>0 = Avere
+    const saldoLabel = (cl===1||cl===4) ? (saldo>=0?'D':'A') : (saldo>=0?'A':'D');
+    const saldoClass = (cl===1||cl===4) ? (saldo>=0?'mastrino-saldo-dare':'mastrino-saldo-avere') : (saldo>=0?'mastrino-saldo-avere':'mastrino-saldo-dare');
 
     return `<div class="mastrino">
       <div class="mastrino-header">
         <span>${conto.codice} — ${conto.nome}</span>
         <div style="display:flex;align-items:center;gap:.6rem">
-          <span>Saldo: ${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</span>
+          <span>Saldo: ${fmt(Math.abs(saldo))} ${saldoLabel}</span>
           ${isContoRateabile(conto.id)?`<button style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:inherit" onclick="apriModalRateazionePerConto('${conto.id}')">📅 Piano rate</button>`:''}
         </div>
       </div>
@@ -1472,19 +1475,21 @@ function buildMastrini(){
           for(let j=0;j<=i;j++){
             saldoProg += (cl===1||cl===4) ? movimenti[j].dare-movimenti[j].avere : movimenti[j].avere-movimenti[j].dare;
           }
+          const spLabel = (cl===1||cl===4) ? (saldoProg>=0?'D':'A') : (saldoProg>=0?'A':'D');
+          const spClass = (cl===1||cl===4) ? (saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere') : (saldoProg>=0?'mastrino-saldo-avere':'mastrino-saldo-dare');
           return `
           <div class="mastrino-td" style="white-space:nowrap;font-size:11px">${fmtData(m.data)}</div>
           <div class="mastrino-td" style="font-size:11px">${m.desc}${m.rif?` <span style="color:var(--text2)">(${m.rif})</span>`:''}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--dare)">${m.dare?fmt(m.dare):'—'}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--avere)">${m.avere?fmt(m.avere):'—'}</div>
-          <div class="mastrino-td ${saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}">${fmt(Math.abs(saldoProg))} ${saldoProg>=0?'D':'A'}</div>
+          <div class="mastrino-td ${spClass}">${fmt(Math.abs(saldoProg))} ${spLabel}</div>
           <div class="mastrino-td">${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px" onclick="openModalPrimaNota('${m.regId}')">✏</button>`:''}</div>`;
         }).join('')}
         <div class="mastrino-td" style="font-weight:700;background:var(--bg3)">TOTALE</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
         <div class="mastrino-td" style="text-align:right;font-weight:700;color:var(--dare);background:var(--bg3)">${fmt(totDare)}</div>
         <div class="mastrino-td" style="text-align:right;font-weight:700;color:var(--avere);background:var(--bg3)">${fmt(totAvere)}</div>
-        <div class="mastrino-td ${saldo>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}" style="background:var(--bg3)">${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</div>
+        <div class="mastrino-td ${saldoClass}" style="background:var(--bg3)">${fmt(Math.abs(saldo))} ${saldoLabel}</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
       </div>
     </div>`;
