@@ -1780,31 +1780,34 @@ function apriModalRateazione(regId, contoId, override){
     document.getElementById('rate-prima-data').value = oggi;
     generaRigheRate();
   }
+  const cadField = document.getElementById('rate-cadenza');
+  if(cadField) cadField.value = '1';
   const impField = document.getElementById('rate-importo-override');
   if(impField) impField.value = importoTot||'';
   apriModal('modal-rateazione');
 }
 
 function generaRigheRate(){
-  const n = parseInt(document.getElementById('rate-numero').value)||1;
-  const primaData = document.getElementById('rate-prima-data').value;
+  const n        = parseInt(document.getElementById('rate-numero').value)||1;
+  const primaData= document.getElementById('rate-prima-data').value;
+  const cadenza  = parseInt(document.getElementById('rate-cadenza')?.value||'1');
   const importoTot = _rateContext?.importoTot||0;
   const rataBase = Math.floor(importoTot/n*100)/100;
-  const ultima = Math.round((importoTot - rataBase*(n-1))*100)/100;
+  const ultima   = Math.round((importoTot - rataBase*(n-1))*100)/100;
 
   _righeRate = Array(n).fill(null).map((_,i)=>{
     let data = '';
     if(primaData){
       const d = new Date(primaData);
-      d.setMonth(d.getMonth()+i);
+      d.setMonth(d.getMonth() + i*cadenza);
       data = d.toISOString().slice(0,10);
     }
     return {
-      id: _righeRate[i]?.id || genId(),
+      id:      _righeRate[i]?.id || genId(),
       scadenza: data,
       importo: i===n-1 ? ultima : rataBase,
       saldato: _righeRate[i]?.saldato||0,
-      stato: _righeRate[i]?.stato||'aperto'
+      stato:   _righeRate[i]?.stato||'aperto'
     };
   });
   renderRigheRate();
@@ -2861,10 +2864,20 @@ async function cambiaRuoloUtente(uid,ruolo){
   <div class="modal" style="width:660px">
     <div class="modal-title" id="rate-modal-title">📅 Piano di Rateazione</div>
     <div id="rate-info" style="background:var(--bg);border-radius:var(--radius);padding:.6rem .8rem;margin-bottom:.8rem;font-size:12px;color:var(--text2)"></div>
-    <div class="two-col" style="margin-bottom:.6rem">
+    <div class="three-col" style="margin-bottom:.6rem">
       <div class="form-row">
         <label class="form-label">Numero rate</label>
         <input type="number" class="form-input" id="rate-numero" min="1" max="60" value="1" oninput="generaRigheRate()">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Cadenza</label>
+        <select class="form-input" id="rate-cadenza" onchange="generaRigheRate()">
+          <option value="1">Mensile</option>
+          <option value="3">Trimestrale</option>
+          <option value="2">Bimestrale</option>
+          <option value="6">Semestrale</option>
+          <option value="12">Annuale</option>
+        </select>
       </div>
       <div class="form-row">
         <label class="form-label">Prima scadenza</label>
