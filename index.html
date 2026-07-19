@@ -362,6 +362,7 @@ tr:hover td{background:var(--bg)}
         <button id="tab-sponsorship" class="btn btn-dark" onclick="switchContratti('sponsorship')">🤝 Sponsorizzazioni</button>
         <button id="tab-staff" class="btn" onclick="switchContratti('staff')">👥 Staff</button>
         <button id="tab-roster" class="btn" onclick="switchContratti('roster')">🏀 Roster</button>
+        <button id="tab-procuratori" class="btn" onclick="switchContratti('procuratori')">🧑‍💼 Procuratori</button>
       </div>
       <div class="toolbar no-print">
         <select id="co-filter-soc" class="form-input" style="width:auto" onchange="buildContrattiDoc()">
@@ -3009,6 +3010,7 @@ async function cambiaRuoloUtente(uid,ruolo){
           <option value="sponsorship">Sponsorizzazione</option>
           <option value="staff">Staff</option>
           <option value="roster">Roster</option>
+          <option value="procuratori">Procuratori</option>
         </select>
       </div>
     </div>
@@ -3195,7 +3197,7 @@ async function caricaContrattiDoc(){
 
 function switchContratti(tab){
   _tabContratti = tab;
-  ['sponsorship','staff','roster'].forEach(t=>{
+  ['sponsorship','staff','roster','procuratori'].forEach(t=>{
     const btn = document.getElementById('tab-'+t);
     if(btn){ btn.className = t===tab ? 'btn btn-dark' : 'btn'; }
   });
@@ -3217,7 +3219,7 @@ function buildContrattiDoc(){
   const cont = document.getElementById('co-container');
   if(!cont) return;
 
-  const titoliTab = {sponsorship:'Sponsorizzazioni',staff:'Contratti Staff',roster:'Roster'};
+  const titoliTab = {sponsorship:'Sponsorizzazioni',staff:'Contratti Staff',roster:'Roster',procuratori:'Procuratori'};
 
   if(!lista.length){
     cont.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--text3)">Nessun contratto in "${titoliTab[_tabContratti]}"</div>`;
