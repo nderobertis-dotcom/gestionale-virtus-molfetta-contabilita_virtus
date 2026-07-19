@@ -1687,6 +1687,29 @@ let _rateContext = null; // { regId, contoId, importoTot, tipo, soc, desc }
 let _righeRate   = [];
 let _saldaRataId = null;
 
+function aggiungiRataModal(){
+  // Aggiunge una rata vuota in fondo
+  const ultimaData = _righeRate.length > 0 ? _righeRate[_righeRate.length-1].scadenza : '';
+  let nuovaData = '';
+  if(ultimaData){
+    const d = new Date(ultimaData);
+    d.setMonth(d.getMonth()+1);
+    nuovaData = d.toISOString().slice(0,10);
+  }
+  _righeRate.push({ id:genId(), scadenza:nuovaData, importo:0, saldato:0, stato:'aperto' });
+  renderRigheRate();
+  // Scrolla in fondo
+  const cont = document.querySelector('#modal-rateazione .modal div[style*="max-height"]');
+  if(cont) cont.scrollTop = cont.scrollHeight;
+}
+
+function aggiornaImportoTotale(val){
+  const nuovoTot = parseFloat(val)||0;
+  if(!nuovoTot||!_rateContext) return;
+  _rateContext.importoTot = nuovoTot;
+  verificaTotaleRate();
+}
+
 function bulkSpostaRateModal(){
   const n     = parseInt(document.getElementById('bulk-rate-giorni').value)||0;
   const unita = document.getElementById('bulk-rate-unita').value;
@@ -1754,6 +1777,8 @@ function apriModalRateazione(regId, contoId, override){
     document.getElementById('rate-prima-data').value = oggi;
     generaRigheRate();
   }
+  const impField = document.getElementById('rate-importo-override');
+  if(impField) impField.value = importoTot||'';
   apriModal('modal-rateazione');
 }
 
@@ -2870,8 +2895,17 @@ async function cambiaRuoloUtente(uid,ruolo){
         <div></div>
       </div>
       <div id="rate-righe"></div>
+      <div style="padding:.4rem .2rem;margin-top:.2rem">
+        <button class="btn" style="font-size:10px;padding:3px 12px;width:100%" onclick="aggiungiRataModal()">+ Aggiungi rata</button>
+      </div>
     </div>
-    <div id="rate-totale-check" style="text-align:right;font-size:11px;font-weight:700;margin-top:.4rem;padding-top:.4rem;border-top:.5px solid var(--border)"></div>
+    <div style="display:flex;align-items:center;gap:.6rem;margin-top:.4rem;padding-top:.4rem;border-top:.5px solid var(--border)">
+      <div id="rate-totale-check" style="flex:1;font-size:11px;font-weight:700"></div>
+      <div style="display:flex;align-items:center;gap:.3rem;white-space:nowrap">
+        <span style="font-size:10px;color:var(--text2)">Importo totale:</span>
+        <input type="number" id="rate-importo-override" class="form-input" style="width:100px;font-size:11px;padding:3px 6px" oninput="aggiornaImportoTotale(this.value)">
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="chiudiModal('modal-rateazione')">Annulla</button>
       <button class="btn btn-dark" onclick="salvaRateazione()">Salva piano</button>
