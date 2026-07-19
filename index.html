@@ -1441,7 +1441,7 @@ function buildMastrini(){
     // Registrazioni
     registrazioni.filter(r=>(!filtSoc||r.soc===filtSoc)).forEach(r=>{
       r.righe.filter(riga=>riga.contoId===conto.id).forEach(riga=>{
-        movimenti.push({ data:r.data, desc:r.desc, dare:riga.dare||0, avere:riga.avere||0, soc:r.soc, rif:r.rif, tipo:'mov' });
+        movimenti.push({ data:r.data, desc:r.desc, dare:riga.dare||0, avere:riga.avere||0, soc:r.soc, rif:r.rif, tipo:'mov', regId:r.id });
       });
     });
 
@@ -1451,7 +1451,6 @@ function buildMastrini(){
     const totAvere = movimenti.reduce((s,m)=>s+m.avere,0);
     const cl = parseInt(conto.classe||conto.codice?.split('.')[0]);
     const saldo = (cl===1||cl===4) ? totDare-totAvere : totAvere-totDare;
-    const saldoLabel = saldo>=0 ? (cl<=2?'Saldo Dare':'Saldo Dare') : 'Saldo Avere';
 
     return `<div class="mastrino">
       <div class="mastrino-header">
@@ -1461,12 +1460,13 @@ function buildMastrini(){
           ${isContoRateabile(conto.id)?`<button style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:inherit" onclick="apriModalRateazionePerConto('${conto.id}')">📅 Piano rate</button>`:''}
         </div>
       </div>
-      <div class="mastrino-body">
+      <div class="mastrino-body" style="grid-template-columns:auto 1fr 120px 120px 120px 60px">
         <div class="mastrino-th">Data</div>
         <div class="mastrino-th">Descrizione</div>
         <div class="mastrino-th" style="text-align:right;color:var(--dare)">Dare €</div>
         <div class="mastrino-th" style="text-align:right;color:var(--avere)">Avere €</div>
         <div class="mastrino-th" style="text-align:right">Saldo prog. €</div>
+        <div class="mastrino-th"></div>
         ${movimenti.map((m,i)=>{
           let saldoProg = 0;
           for(let j=0;j<=i;j++){
@@ -1477,13 +1477,15 @@ function buildMastrini(){
           <div class="mastrino-td" style="font-size:11px">${m.desc}${m.rif?` <span style="color:var(--text2)">(${m.rif})</span>`:''}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--dare)">${m.dare?fmt(m.dare):'—'}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--avere)">${m.avere?fmt(m.avere):'—'}</div>
-          <div class="mastrino-td ${saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}">${fmt(Math.abs(saldoProg))} ${saldoProg>=0?'D':'A'}</div>`;
+          <div class="mastrino-td ${saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}">${fmt(Math.abs(saldoProg))} ${saldoProg>=0?'D':'A'}</div>
+          <div class="mastrino-td">${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px" onclick="openModalPrimaNota('${m.regId}')">✏</button>`:''}</div>`;
         }).join('')}
         <div class="mastrino-td" style="font-weight:700;background:var(--bg3)">TOTALE</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
         <div class="mastrino-td" style="text-align:right;font-weight:700;color:var(--dare);background:var(--bg3)">${fmt(totDare)}</div>
         <div class="mastrino-td" style="text-align:right;font-weight:700;color:var(--avere);background:var(--bg3)">${fmt(totAvere)}</div>
         <div class="mastrino-td ${saldo>=0?'mastrino-saldo-dare':'mastrino-saldo-avere'}" style="background:var(--bg3)">${fmt(Math.abs(saldo))} ${saldo>=0?'D':'A'}</div>
+        <div class="mastrino-td" style="background:var(--bg3)"></div>
       </div>
     </div>`;
   }).join('');
