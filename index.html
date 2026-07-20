@@ -639,11 +639,12 @@ tr:hover td{background:var(--bg)}
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Movimenti contabili</div>
         <button class="btn" onclick="aggiungiRigaPD()" style="font-size:10px;padding:3px 10px">+ Riga</button>
       </div>
-      <div style="display:grid;grid-template-columns:80px 1fr 130px 130px 28px;gap:.4rem;margin-bottom:.3rem;padding:0 .2rem">
+      <div style="display:grid;grid-template-columns:80px 1fr 120px 120px 110px 28px;gap:.4rem;margin-bottom:.3rem;padding:0 .2rem">
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Tipo</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Conto</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;text-align:right">Dare €</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;text-align:right">Avere €</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Scadenza</div>
         <div></div>
       </div>
       <div id="pd-righe"></div>
@@ -1074,8 +1075,10 @@ function openModalPrimaNota(id){
 
 function renderPDRighe(){
   const cont = document.getElementById('pd-righe');
-  cont.innerHTML = _pdRighe.map((r,i)=>`
-    <div style="display:grid;grid-template-columns:80px 1fr 130px 130px 28px;gap:.4rem;margin-bottom:.35rem;align-items:center">
+  cont.innerHTML = _pdRighe.map((r,i)=>{
+    const rateabile = isContoRateabile(r.contoId);
+    return `
+    <div style="display:grid;grid-template-columns:80px 1fr 120px 120px 110px 28px;gap:.4rem;margin-bottom:.35rem;align-items:center">
       <select class="form-input" style="font-size:11px;padding:5px 6px" onchange="_pdRighe[${i}].tipo=this.value;aggiornaSaldoPD()">
         <option value="dare"  ${r.tipo==='dare'?'selected':''} style="color:var(--dare)">DARE</option>
         <option value="avere" ${r.tipo==='avere'?'selected':''} style="color:var(--avere)">AVERE</option>
@@ -1090,15 +1093,20 @@ function renderPDRighe(){
       <input type="number" class="form-input" value="${r.avere||''}"
         style="font-size:11px;padding:5px 8px;text-align:right;${r.tipo==='avere'?'border-color:var(--avere)':''}"
         placeholder="0" oninput="_pdRighe[${i}].avere=parseFloat(this.value)||0;aggiornaSaldoPD()">
+      <input type="date" class="form-input" value="${r.scadenza||''}"
+        style="font-size:10px;padding:4px 5px;${rateabile?'border-color:#1565C0;':'opacity:.35;'}"
+        title="${rateabile?'Data scadenza per questo conto':'Scadenza solo per conti crediti/debiti'}"
+        oninput="_pdRighe[${i}].scadenza=this.value">
       <button class="btn-del" onclick="_pdRighe.splice(${i},1);renderPDRighe()" style="padding:2px 6px">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   aggiornaSaldoPD();
 }
 
 function selezionaConto(idx, val){
-  // Cerca il conto per codice o nome
   const conto = pianoConti.find(c=>`${c.codice} — ${c.nome}` === val || c.id === val || c.nome === val);
   _pdRighe[idx].contoId = conto ? conto.id : val;
+  renderPDRighe(); // ri-renderizza per aggiornare stile campo scadenza
 }
 
 function aggiungiRigaPD(){
@@ -1149,8 +1157,9 @@ async function salvaPrimaNota(){
     registrazioni.push(rec);
   }
 
-  // Aggiorna scadenzario se c'è data scadenza
-  if(rec.scadenza) aggiornaScadenzario(rec);
+  // Aggiorna scadenzario per righe con scadenza per riga O scadenza globale
+  const hasRigheScad = rec.righe.some(r=>r.scadenza&&isContoRateabile(r.contoId));
+  if(hasRigheScad || rec.scadenza) aggiornaScadenzario(rec);
 
   chiudiModal('modal-primanota');
   renderPrimaNota();
@@ -1194,21 +1203,24 @@ async function salvaPrimaNota(){
 function aggiornaScadenzario(reg){
   // Crea/aggiorna voci scadenzario per ogni riga con conto crediti/debiti
   reg.righe.forEach(riga=>{
+    if(!isContoRateabile(riga.contoId)) return;
     const conto = pianoConti.find(c=>c.id===riga.contoId);
     if(!conto) return;
     const cl = parseInt(conto.codice?.split('.')[0]);
-    if(cl!==1 && cl!==2) return; // solo conti patrimoniali finanziari
     const importo = (riga.dare||0) + (riga.avere||0);
     if(!importo) return;
+    // Usa scadenza per riga se presente, altrimenti quella globale
+    const scadenza = riga.scadenza || reg.scadenza;
+    if(!scadenza) return;
     const tipo = cl===1 ? 'credito' : 'debito';
     const esiste = scadenzario.find(s=>s.regId===reg.id&&s.contoId===riga.contoId);
     if(esiste){
-      esiste.importo=importo; esiste.scadenza=reg.scadenza; esiste.desc=reg.desc;
+      esiste.importo=importo; esiste.scadenza=scadenza; esiste.controparte=reg.desc;
     } else {
       scadenzario.push({
         id: genId(), regId:reg.id, soc:reg.soc, tipo,
         contoId:riga.contoId, controparte:reg.desc,
-        importo, saldato:0, scadenza:reg.scadenza,
+        importo, saldato:0, scadenza,
         stato:'aperto', note:reg.rif||''
       });
     }
