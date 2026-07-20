@@ -2190,6 +2190,7 @@ function buildScadenzario(){
       <td><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;${statiStyle[stato]}">${stato==='aperto'?'FUTURO':stato==='corrente'?'QUESTO MESE':stato.toUpperCase()}</span></td>
       <td style="white-space:nowrap">
         ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
+        <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" title="Converti in piano rateale / modifica" onclick="convertiInPiano('${s.id}')">📅</button>
       </td>
     </tr>`;
   }
@@ -2363,6 +2364,40 @@ async function bulkCambiaImporto(){
   deselezionaTutte();
   if(window.salvaEAggiorna) await window.salvaEAggiorna();
   buildScadenzario();
+}
+
+function convertiInPiano(scadId){
+  const s = scadenzario.find(x=>x.id===scadId);
+  if(!s) return;
+  // Crea un piano fittizio con una rata sola e apre il modal per modificarlo
+  const pianoId = genId();
+  const piano = {
+    id: pianoId,
+    regId:  s.regId || '__singola__',
+    contoId: s.contoId,
+    tipo:   s.tipo==='credito' ? 'incasso' : 'pagamento',
+    soc:    s.soc,
+    desc:   s.controparte,
+    rate: [{
+      id:       s.id,
+      scadenza: s.scadenza,
+      importo:  s.importo,
+      saldato:  s.saldato||0,
+      stato:    s.stato||'aperto'
+    }]
+  };
+  pianiRateazione.push(piano);
+  // Collega la voce scadenzario al nuovo piano
+  s.pianoId  = pianoId;
+  s.nRata    = 1;
+  s.totRate  = 1;
+  // Apri il modal di modifica
+  apriModalRateazione(piano.regId, piano.contoId, {
+    importoTot: s.importo,
+    tipo:       piano.tipo,
+    soc:        piano.soc,
+    desc:       piano.desc
+  });
 }
 
 function togglePianoScad(pianoId){
