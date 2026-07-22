@@ -1636,12 +1636,26 @@ function buildMastrinoRate(contoId){
     +'</div>'+righeHTML+'</div>';
 }
 
+// Ricostruisce importo/tipo/soc/desc da un piano già salvato — usato per riaprirlo
+// senza dover ritrovare una registrazione prima nota collegata (i piani "manuali"
+// non ne hanno una, e il regId '__manuale__' non corrisponde a nulla in registrazioni).
+function costruisciOverrideDaPiano(piano){
+  const importoTot = piano.rate.reduce((s,r)=>s+(parseFloat(r.importo)||0),0);
+  return { importoTot, tipo:piano.tipo, soc:piano.soc, desc:piano.desc };
+}
+
+function apriModalRateazionePerPianoId(pianoId){
+  const piano = pianiRateazione.find(p=>p.id===pianoId);
+  if(!piano){ alert('Piano di rateazione non trovato.'); return; }
+  apriModalRateazione(piano.regId, piano.contoId, costruisciOverrideDaPiano(piano));
+}
+
 function apriModalRateazionePerConto(contoId){
   // Cerca il piano più recente per questo conto
   const piani = pianiRateazione.filter(p=>p.contoId===contoId);
   if(piani.length>0){
     const piano = piani[piani.length-1];
-    apriModalRateazione(piano.regId, contoId);
+    apriModalRateazione(piano.regId, contoId, costruisciOverrideDaPiano(piano));
   } else {
     // Crea nuovo piano calcolando il saldo del conto
     const saldo = Math.abs(calcolaSaldoConto(contoId));
@@ -2321,7 +2335,7 @@ function buildScadenzario(){
         <button class="btn" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();togglePianoScad('${pianoId}')">
           📅 ${isOpen?'▲':'▼'}
         </button>
-        <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="event.stopPropagation();apriModalRateazione('${prima.regId||''}','${prima.contoId}')">✏</button>
+        <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="event.stopPropagation();apriModalRateazionePerPianoId('${pianoId}')">✏</button>
       </td>
     </tr>
     <tr id="scad-piano-open-${pianoId}" data-open="${isOpen?'1':'0'}" style="display:${isOpen?'':'none'}">
