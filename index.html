@@ -274,9 +274,6 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
     <button class="nav-item" onclick="showPage('scadenzario',this)"><span class="icon">📅</span>Scadenzario</button>
     <button class="nav-item" onclick="showPage('situazione-patrimoniale',this)"><span class="icon">🏛</span>Situazione Patrimoniale</button>
 
-    <div class="nav-section">Sponsor</div>
-    <button class="nav-item" onclick="showPage('crm',this)"><span class="icon">🤝</span>CRM Sponsor</button>
-
     <div class="nav-section">Archivio</div>
     <button class="nav-item" onclick="showPage('archivio',this)"><span class="icon">🗄</span>Archivio 2025/2026</button>
 
@@ -328,7 +325,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <div style="font-size:26px;font-weight:800;color:var(--text1)">Gruppo Virtus Molfetta</div>
           <div style="font-size:13px;color:var(--text2);margin-top:.3rem">Stagione 2026/2027</div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;width:100%;max-width:750px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1.5rem;width:100%;max-width:980px">
           <!-- CONTABILITÀ -->
           <div onclick="apriModulo('contabilita')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#0D3B6E';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
             <div style="font-size:2.5rem;margin-bottom:.8rem">📒</div>
@@ -346,6 +343,12 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
             <div style="font-size:2.5rem;margin-bottom:.8rem">📄</div>
             <div style="font-size:15px;font-weight:800;color:#6B3A00">Contratti</div>
             <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Sponsorizzazioni · Staff · Roster</div>
+          </div>
+          <!-- CRM SPONSOR -->
+          <div onclick="apriModulo('crm-sponsor')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#8A6D00';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="font-size:2.5rem;margin-bottom:.8rem">🤝</div>
+            <div style="font-size:15px;font-weight:800;color:#8A6D00">CRM Sponsor</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Anagrafica · Trattative · Interazioni</div>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:1rem" id="benv-user-info"></div>
@@ -408,8 +411,13 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
     <!-- ── CRM SPONSOR ── -->
     <div id="page-crm" class="page">
       <div class="page-header">
-        <div class="page-title">🤝 CRM Sponsor</div>
-        <div class="page-sub">Anagrafica, trattative e storico contatti — i contratti PDF restano nella sezione Contratti → Sponsorizzazioni</div>
+        <div style="display:flex;align-items:center;gap:.8rem">
+          <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
+          <div>
+            <div class="page-title">🤝 CRM Sponsor</div>
+            <div class="page-sub">Anagrafica, trattative e storico contatti — i contratti PDF restano nella sezione Contratti → Sponsorizzazioni</div>
+          </div>
+        </div>
       </div>
 
       <div class="metrics" id="crm-metrics"></div>
@@ -3544,6 +3552,9 @@ function apriModulo(modulo){
     sidebar.style.display = 'none';
     caricaContrattiDoc();
     showPage('contratti-doc', null);
+  } else if(modulo === 'crm-sponsor'){
+    sidebar.style.display = 'none';
+    showPage('crm', null); // dati già in memoria via listener realtime, nessun caricamento da fare
   }
 }
 
