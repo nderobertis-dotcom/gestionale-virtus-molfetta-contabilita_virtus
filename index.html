@@ -675,7 +675,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <div class="page-sub">Struttura gerarchica — Classe → Gruppo → Conto → Sottoconto</div>
       </div>
       <div class="toolbar">
-        <button class="btn btn-dark" onclick="openModalNuovoConto()">+ Nuovo conto</button>
+        <button class="btn btn-dark" onclick="_pdRigaContoTarget=null;openModalNuovoConto()">+ Nuovo conto</button>
         <input type="text" id="pdc-search" class="form-input" placeholder="🔍 Cerca conto..." style="width:200px" oninput="renderPianoConti()">
       </div>
       <div id="pdc-container"></div>
@@ -722,9 +722,10 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Movimenti contabili</div>
         <button class="btn" onclick="aggiungiRigaPD()" style="font-size:10px;padding:3px 10px">+ Riga</button>
       </div>
-      <div style="display:grid;grid-template-columns:80px 1fr 120px 120px 110px 28px;gap:.4rem;margin-bottom:.3rem;padding:0 .2rem">
+      <div style="display:grid;grid-template-columns:80px 1fr 26px 120px 120px 110px 28px;gap:.4rem;margin-bottom:.3rem;padding:0 .2rem">
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Tipo</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Conto</div>
+        <div></div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;text-align:right">Dare €</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase;text-align:right">Avere €</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-transform:uppercase">Scadenza</div>
@@ -1139,6 +1140,7 @@ function calcolaSaldi(classe, soc){
 // ══════════════════════════════════════════════════════════════
 let _editRegId = null;
 let _pdRighe = [];
+let _pdRigaContoTarget = null; // indice della riga prima nota in attesa di un nuovo conto appena creato
 
 function openModalPrimaNota(id){
   _editRegId = id || null;
@@ -1162,7 +1164,7 @@ function renderPDRighe(){
   cont.innerHTML = _pdRighe.map((r,i)=>{
     const rateabile = isContoRateabile(r.contoId);
     return `
-    <div style="display:grid;grid-template-columns:80px 1fr 120px 120px 110px 28px;gap:.4rem;margin-bottom:.35rem;align-items:center">
+    <div style="display:grid;grid-template-columns:80px 1fr 26px 120px 120px 110px 28px;gap:.4rem;margin-bottom:.35rem;align-items:center">
       <select class="form-input" style="font-size:11px;padding:5px 6px" onchange="_pdRighe[${i}].tipo=this.value;aggiornaSaldoPD()">
         <option value="dare"  ${r.tipo==='dare'?'selected':''} style="color:var(--dare)">DARE</option>
         <option value="avere" ${r.tipo==='avere'?'selected':''} style="color:var(--avere)">AVERE</option>
@@ -1171,6 +1173,8 @@ function renderPDRighe(){
         style="font-size:11px;padding:5px 8px"
         onchange="selezionaConto(${i},this.value)"
         placeholder="Cerca conto...">
+      <button type="button" class="btn" title="Crea nuovo sottoconto" onclick="apriNuovoContoDaRigaPD(${i})"
+        style="font-size:12px;padding:5px 0;text-align:center;font-weight:700">+</button>
       <input type="number" class="form-input" value="${r.dare||''}"
         style="font-size:11px;padding:5px 8px;text-align:right;${r.tipo==='dare'?'border-color:var(--dare)':''}"
         placeholder="0" oninput="_pdRighe[${i}].dare=parseFloat(this.value)||0;aggiornaSaldoPD()">
@@ -2542,7 +2546,7 @@ function renderPianoConti(){
             <button class="btn" style="padding:1px 6px;font-size:10px;margin-right:3px" onclick="editConto('${c.id}')">✏</button>
           </div>`).join('')}
         <div style="padding:.5rem 1rem">
-          <button class="btn" style="font-size:10px;padding:3px 10px" onclick="openModalNuovoConto(${cl})">+ Aggiungi conto classe ${cl}</button>
+          <button class="btn" style="font-size:10px;padding:3px 10px" onclick="_pdRigaContoTarget=null;openModalNuovoConto(${cl})">+ Aggiungi conto classe ${cl}</button>
         </div>
       </div>
     </div>`;
@@ -2554,6 +2558,7 @@ function renderPianoConti(){
 function editConto(id){
   const c = pianoConti.find(x=>x.id===id);
   if(!c) return;
+  _pdRigaContoTarget = null;
   document.getElementById('nc-classe').value = c.classe||c.codice?.split('.')[0]||'1';
   document.getElementById('nc-tipo').value   = c.tipo||'conto';
   document.getElementById('nc-padre').value  = c.padre ? (pianoConti.find(x=>x.id===c.padre) ? `${pianoConti.find(x=>x.id===c.padre).codice} — ${pianoConti.find(x=>x.id===c.padre).nome}` : c.padre) : '';
@@ -2563,6 +2568,11 @@ function editConto(id){
   document.getElementById('modal-nuovo-conto').dataset.editId = id;
   document.querySelector('#modal-nuovo-conto .modal-title').textContent = '✏ Modifica Conto';
   apriModal('modal-nuovo-conto');
+}
+
+function apriNuovoContoDaRigaPD(i){
+  _pdRigaContoTarget = i;
+  openModalNuovoConto(); // classe non pre-impostata: chi registra sa in che classe cade il costo/ricavo
 }
 
 function openModalNuovoConto(classe){
@@ -2612,8 +2622,17 @@ function salvaNuovoConto(){
   }
 
   pianoConti.sort((a,b)=>a.codice?.localeCompare(b.codice));
+  aggiornaDatalist();
   chiudiModal('modal-nuovo-conto');
   renderPianoConti();
+
+  // Se il conto è stato creato dal pulsante "+" di una riga di prima nota, assegnalo a quella riga
+  if(!editId && _pdRigaContoTarget!==null && _pdRighe[_pdRigaContoTarget]){
+    _pdRighe[_pdRigaContoTarget].contoId = codice;
+    _pdRigaContoTarget = null;
+    renderPDRighe();
+  }
+
   window.salvaEAggiorna && window.salvaEAggiorna();
 }
 
