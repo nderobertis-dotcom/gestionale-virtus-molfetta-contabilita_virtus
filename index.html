@@ -1535,7 +1535,7 @@ function buildMastrini(){
 
     // Saldo apertura
     bilancioApertura.filter(b=>b.contoId===conto.id&&(!filtSoc||b.soc===filtSoc)).forEach(b=>{
-      movimenti.push({ data:STAGIONE_START, desc:'Saldo iniziale', dare:b.dare||0, avere:b.avere||0, soc:b.soc, tipo:'apertura' });
+      movimenti.push({ id:b.id, data:STAGIONE_START, desc:'Saldo iniziale'+(b.note?' — '+b.note:''), dare:b.dare||0, avere:b.avere||0, soc:b.soc, tipo:'apertura' });
     });
 
     // Registrazioni
@@ -1560,7 +1560,7 @@ function buildMastrini(){
         <span>${conto.codice} — ${conto.nome}</span>
         <div style="display:flex;align-items:center;gap:.6rem">
           <span>Saldo: ${fmt(Math.abs(saldo))} ${saldoLabel}</span>
-          ${isContoRateabile(conto.id)?`<button style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:inherit" onclick="apriModalRateazionePerConto('${conto.id}','${filtSoc}')">📅 Piano rate</button>`:''}
+          ${isContoRateabile(conto.id)?`<span style="font-size:9px;color:rgba(255,255,255,.6)" title="Ogni voce ha un proprio piano rate: usa l'icona 📅 sulla singola riga">📅 per riga</span>`:''}
         </div>
       </div>
       <div class="mastrino-body" style="grid-template-columns:auto 1fr 120px 120px 120px 60px">
@@ -1577,13 +1577,18 @@ function buildMastrini(){
           }
           const spLabel = (cl===1||cl===4) ? (saldoProg>=0?'D':'A') : (saldoProg>=0?'A':'D');
           const spClass = (cl===1||cl===4) ? (saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere') : (saldoProg>=0?'mastrino-saldo-avere':'mastrino-saldo-dare');
+          const rateBtn = isContoRateabile(conto.id)
+            ? (m.tipo==='apertura'
+                ? `<button class="btn" style="font-size:9px;padding:1px 6px" title="Piano rate per questa voce" onclick="apriRateazioneApertura('${m.id}')">📅</button>`
+                : `<button class="btn" style="font-size:9px;padding:1px 6px" title="Piano rate per questa registrazione" onclick="apriModalRateazione('${m.regId}','${conto.id}')">📅</button>`)
+            : '';
           return `
           <div class="mastrino-td" style="white-space:nowrap;font-size:11px">${fmtData(m.data)}</div>
           <div class="mastrino-td" style="font-size:11px">${m.desc}${m.rif?` <span style="color:var(--text2)">(${m.rif})</span>`:''}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--dare)">${m.dare?fmt(m.dare):'—'}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--avere)">${m.avere?fmt(m.avere):'—'}</div>
           <div class="mastrino-td ${spClass}">${fmt(Math.abs(saldoProg))} ${spLabel}</div>
-          <div class="mastrino-td">${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px" onclick="openModalPrimaNota('${m.regId}')">✏</button>`:''}</div>`;
+          <div class="mastrino-td" style="white-space:nowrap">${rateBtn}${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="openModalPrimaNota('${m.regId}')">✏</button>`:''}</div>`;
         }).join('')}
         <div class="mastrino-td" style="font-weight:700;background:var(--bg3)">TOTALE</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
