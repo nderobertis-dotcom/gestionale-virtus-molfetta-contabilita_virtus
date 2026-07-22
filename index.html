@@ -131,6 +131,34 @@ tr:hover td{background:var(--bg)}
 .badge-d{background:#D6F0E4;color:#0A4D3C}
 .badge-i{background:#F5E6D0;color:#6B3A00}
 
+/* ── CRM SPONSOR ── */
+body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!important}
+.crm-toggle{display:flex;gap:.5rem;margin-bottom:.8rem}
+.crm-toggle .btn.active{background:var(--blu);color:#fff;border-color:var(--blu)}
+.badge-stato{display:inline-block;padding:2px 9px;border-radius:10px;font-size:9px;font-weight:700;text-transform:uppercase;white-space:nowrap}
+.badge-stato.lead{background:#F0F0F0;color:#555}
+.badge-stato.contattato{background:#DCEBFB;color:#0D3B6E}
+.badge-stato.trattativa{background:#FFF2CC;color:#7B3F00}
+.badge-stato.attivo{background:#C6EFCE;color:#1A5C38}
+.badge-stato.scaduto{background:#FDEBD0;color:#943126}
+.badge-stato.perso{background:#FADBD8;color:#943126}
+.badge-cat{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700}
+.badge-cat.bronze{background:#F0E0D0;color:#6B3A00}
+.badge-cat.silver{background:#E4E4E4;color:#444}
+.badge-cat.gold{background:#FCEBB0;color:#8A6D00}
+.badge-cat.platinum{background:#DCEAFB;color:#0D3B6E}
+.crm-scadenza-warn{color:var(--rosso);font-weight:700}
+.kanban-wrap{display:grid;grid-template-columns:repeat(6,minmax(190px,1fr));gap:.7rem;overflow-x:auto}
+.kanban-col{background:var(--bg3);border-radius:var(--radius);padding:.6rem;min-height:120px}
+.kanban-col h4{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);margin-bottom:.5rem}
+.kanban-card{background:var(--bg2);border:.5px solid var(--border);border-radius:6px;padding:.5rem .6rem;margin-bottom:.5rem;cursor:pointer;font-size:11px}
+.kanban-card:hover{border-color:var(--border2)}
+.kanban-card .kc-nome{font-weight:700;color:var(--text1);margin-bottom:2px}
+.kanban-card .kc-val{color:var(--text2);font-size:10px}
+.crm-interazioni{border-top:1px solid var(--border);margin-top:1rem;padding-top:.8rem}
+.crm-int-item{background:var(--bg);border-radius:6px;padding:.5rem .7rem;margin-bottom:.5rem;font-size:11px}
+.crm-int-item .ci-meta{color:var(--text3);font-size:10px;margin-bottom:2px}
+
 /* ── LOGIN ── */
 #login-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,#0D3B6E 0%,#1A5C38 50%,#6B3A00 100%)}
@@ -245,6 +273,9 @@ tr:hover td{background:var(--bg)}
     <button class="nav-item" onclick="showPage('conto-economico',this)"><span class="icon">📊</span>Conto Economico</button>
     <button class="nav-item" onclick="showPage('scadenzario',this)"><span class="icon">📅</span>Scadenzario</button>
     <button class="nav-item" onclick="showPage('situazione-patrimoniale',this)"><span class="icon">🏛</span>Situazione Patrimoniale</button>
+
+    <div class="nav-section">Sponsor</div>
+    <button class="nav-item" onclick="showPage('crm',this)"><span class="icon">🤝</span>CRM Sponsor</button>
 
     <div class="nav-section">Archivio</div>
     <button class="nav-item" onclick="showPage('archivio',this)"><span class="icon">🗄</span>Archivio 2025/2026</button>
@@ -374,6 +405,48 @@ tr:hover td{background:var(--bg)}
       </div>
       <div id="co-container"></div>
     </div>
+    <!-- ── CRM SPONSOR ── -->
+    <div id="page-crm" class="page">
+      <div class="page-header">
+        <div class="page-title">🤝 CRM Sponsor</div>
+        <div class="page-sub">Anagrafica, trattative e storico contatti — i contratti PDF restano nella sezione Contratti → Sponsorizzazioni</div>
+      </div>
+
+      <div class="metrics" id="crm-metrics"></div>
+
+      <div class="crm-toggle no-print">
+        <button class="btn active" id="crm-view-tabella" onclick="crmSwitchView('tabella')">📋 Tabella</button>
+        <button class="btn" id="crm-view-kanban" onclick="crmSwitchView('kanban')">🗂 Kanban</button>
+      </div>
+
+      <div class="toolbar no-print">
+        <select id="crm-filter-stato" class="form-input" style="width:auto" onchange="buildCRM()">
+          <option value="">Tutti gli stati</option>
+          <option value="lead">Lead</option>
+          <option value="contattato">Contattato</option>
+          <option value="trattativa">In trattativa</option>
+          <option value="attivo">Attivo</option>
+          <option value="scaduto">Scaduto</option>
+          <option value="perso">Perso</option>
+        </select>
+        <select id="crm-filter-cat" class="form-input" style="width:auto" onchange="buildCRM()">
+          <option value="">Tutte le categorie</option>
+          <option value="bronze">Bronze</option>
+          <option value="silver">Silver</option>
+          <option value="gold">Gold</option>
+          <option value="platinum">Platinum</option>
+        </select>
+        <select id="crm-filter-soc" class="form-input" style="width:auto" onchange="buildCRM()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <input type="text" id="crm-search" class="form-input" placeholder="🔍 Cerca sponsor/referente..." style="width:200px" oninput="buildCRM()">
+        <button class="btn btn-dark perm-admin" onclick="apriModalSponsor()">+ Nuovo Sponsor</button>
+      </div>
+
+      <div id="crm-container"></div>
+    </div>
+
     <!-- PRIMA NOTA -->
     <div id="page-primanota" class="page">
       <div class="page-header">
@@ -885,6 +958,7 @@ function showPage(id, el){
     'situazione-patrimoniale': buildSituazionePatrimoniale,
     'piano-conti': renderPianoConti,
     'utenti': caricaUtenti,
+    'crm': buildCRM,
   };
   if(builds[id]) builds[id]();
 }
@@ -2651,9 +2725,10 @@ function switchArchivio(tab, el){
 // ══════════════════════════════════════════════════════════════
 function esportaBackup(){
   const backup = {
-    versione:'2.0-contabilita',
+    versione:'2.1-contabilita-crm',
     data: new Date().toISOString(),
-    pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione
+    pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione,
+    crmSponsor // sezione separata: vive in una collection Firestore propria, qui solo per comodita' di backup unico
   };
   const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const a = document.createElement('a');
@@ -2677,6 +2752,16 @@ function importaBackup(event){
       if(b.scadenzario)   scadenzario    = b.scadenzario;
       if(b.pianiRateazione) pianiRateazione = b.pianiRateazione;
       await window.salvaDatiFirestore();
+      if(Array.isArray(b.crmSponsor) && b.crmSponsor.length){
+        if(confirm(`Il backup contiene ${b.crmSponsor.length} sponsor CRM. Ripristinare anche quelli (sovrascrivendo per ID)?`)){
+          const batch = db.batch();
+          b.crmSponsor.forEach(s=>{
+            const {id, ...dati} = s;
+            batch.set(CRM_REF().doc(id||undefined), dati, {merge:true});
+          });
+          await batch.commit();
+        }
+      }
       buildHome();
       alert('✅ Ripristino completato.');
     }catch(err){ alert('Errore: '+err.message); }
@@ -2789,6 +2874,7 @@ window.caricaDatiFirestore = async function(){
 
 // ── LISTENER TEMPO REALE ──
 let _listenerUnsubscribe = null;
+let _crmListenerUnsubscribe = null;
 window.avviaListenerDati = function(){
   let primo = true;
   const unsub = DATI_REF().onSnapshot(snap=>{
@@ -2825,6 +2911,8 @@ window.doLogin = async function(){
 window.doLogout = async function(){
   if(!confirm('Vuoi uscire?')) return;
   if(_listenerUnsubscribe){ _listenerUnsubscribe(); _listenerUnsubscribe=null; }
+  if(_crmListenerUnsubscribe){ _crmListenerUnsubscribe(); _crmListenerUnsubscribe=null; }
+  document.body.classList.remove('role-admin','role-editor','role-visitor');
   await auth.signOut();
 };
 
@@ -2845,6 +2933,8 @@ auth.onAuthStateChanged(async function(user){
       }
       window._currentUser = { uid:user.uid, email:user.email, ...profilo };
       window.currentRuolo = profilo.ruolo;
+      document.body.classList.remove('role-admin','role-editor','role-visitor');
+      document.body.classList.add('role-'+(profilo.ruolo||'visitor'));
       document.getElementById('login-overlay').style.display='none';
       document.getElementById('user-bar-name').textContent = profilo.nome||user.email;
       document.getElementById('ruolo-badge').textContent = profilo.ruolo?.toUpperCase();
@@ -2853,6 +2943,7 @@ auth.onAuthStateChanged(async function(user){
       // Carica dati
       await window.caricaDatiFirestore();
       if(!_listenerUnsubscribe) _listenerUnsubscribe = window.avviaListenerDati();
+      if(!_crmListenerUnsubscribe) _crmListenerUnsubscribe = window.avviaListenerCRM();
       // Render iniziale
       renderPianoConti();
       aggiornaDatalist();
@@ -3112,6 +3203,98 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+<!-- ── MODAL SPONSOR (anagrafica) ── -->
+<div class="modal-overlay" id="modal-sponsor" onclick="if(event.target===this)chiudiModal('modal-sponsor')">
+  <div class="modal" style="width:560px">
+    <div class="modal-title" id="sp-modal-title">🤝 Nuovo Sponsor</div>
+    <input type="hidden" id="sp-id">
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Ragione sociale *</label>
+        <input type="text" class="form-input" id="sp-nome" placeholder="es. Farmacia Rossi srl">
+      </div>
+      <div class="form-row"><label class="form-label">Società di riferimento</label>
+        <select class="form-input" id="spn-soc">
+          <option value="">Gruppo Virtus</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Referente</label>
+        <input type="text" class="form-input" id="sp-referente" placeholder="Nome del contatto">
+      </div>
+      <div class="form-row"><label class="form-label">Telefono</label>
+        <input type="text" class="form-input" id="sp-telefono">
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Email</label>
+      <input type="email" class="form-input" id="sp-email">
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Categoria</label>
+        <select class="form-input" id="sp-categoria">
+          <option value="bronze">Bronze</option>
+          <option value="silver">Silver</option>
+          <option value="gold">Gold</option>
+          <option value="platinum">Platinum</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Stato trattativa</label>
+        <select class="form-input" id="sp-stato">
+          <option value="lead">Lead</option>
+          <option value="contattato">Contattato</option>
+          <option value="trattativa">In trattativa</option>
+          <option value="attivo">Attivo</option>
+          <option value="scaduto">Scaduto</option>
+          <option value="perso">Perso</option>
+        </select>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Valore annuo (€)</label>
+        <input type="number" class="form-input" id="sp-valore" step="0.01" min="0">
+      </div>
+      <div class="form-row"><label class="form-label">Scadenza rinnovo</label>
+        <input type="date" class="form-input" id="sp-scadenza">
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Note</label>
+      <textarea class="form-input" id="sp-note" rows="2" placeholder="Note generali sullo sponsor..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-sponsor')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaSponsor()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL DETTAGLIO SPONSOR (storico interazioni) ── -->
+<div class="modal-overlay" id="modal-sponsor-detail" onclick="if(event.target===this)chiudiModal('modal-sponsor-detail')">
+  <div class="modal" style="width:560px">
+    <div class="modal-title" id="spd-title">🤝 Sponsor</div>
+    <div id="spd-info" style="font-size:12px;color:var(--text2);margin-bottom:.8rem;line-height:1.6"></div>
+    <div class="crm-interazioni">
+      <label class="form-label">Nuova interazione</label>
+      <div style="display:flex;gap:.5rem;margin-bottom:.6rem;flex-wrap:wrap">
+        <select class="form-input" id="spd-int-tipo" style="width:130px">
+          <option value="chiamata">📞 Chiamata</option>
+          <option value="email">✉️ Email</option>
+          <option value="incontro">🤝 Incontro</option>
+          <option value="altro">📝 Altro</option>
+        </select>
+        <input type="text" class="form-input" id="spd-int-testo" placeholder="Cosa è successo..." style="flex:1;min-width:180px">
+        <button class="btn btn-dark" onclick="aggiungiInterazione()">+ Aggiungi</button>
+      </div>
+      <div id="spd-interazioni-list"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-sponsor-detail')">Chiudi</button>
+      <button class="btn btn-dark perm-admin" id="spd-modifica-btn">✏️ Modifica anagrafica</button>
+      <button class="btn-del perm-admin" id="spd-elimina-btn">✕ Elimina</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
 <script>
@@ -3121,9 +3304,221 @@ async function cambiaRuoloUtente(uid,ruolo){
 let fattureAttive = [];
 let contrattiDoc  = [];
 let _tabContratti = 'sponsorship';
+let crmSponsor    = [];
+let _crmView      = 'tabella';
 
 const FA_REF  = () => db.collection('fatture_attive');
 const CON_REF = () => db.collection('contratti_doc');
+// CRM in collection dedicata (un documento per sponsor): scelta deliberata per NON
+// infilarlo dentro DATI_REF('contabilita/dati'), che e' un doc unico riscritto per
+// intero ad ogni salvataggio contabile e con listener realtime proprio — mescolarli
+// avrebbe causato re-render incrociati e rischio di sovrascritture concorrenti.
+const CRM_REF = () => db.collection('crm_sponsor');
+
+// ── CRM SPONSOR: listener realtime ──
+window.avviaListenerCRM = function(){
+  return CRM_REF().onSnapshot(snap=>{
+    crmSponsor = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(document.getElementById('page-crm')?.classList.contains('active')) buildCRM();
+  }, err=>console.error('Listener CRM:',err.message));
+};
+
+function crmSwitchView(v){
+  _crmView = v;
+  document.getElementById('crm-view-tabella').classList.toggle('active', v==='tabella');
+  document.getElementById('crm-view-kanban').classList.toggle('active', v==='kanban');
+  buildCRM();
+}
+
+function crmGiorniScadenza(dataStr){
+  if(!dataStr) return null;
+  return Math.ceil((new Date(dataStr) - new Date()) / 86400000);
+}
+
+const CRM_STATI = [
+  {v:'lead',        l:'Lead'},
+  {v:'contattato',  l:'Contattato'},
+  {v:'trattativa',  l:'In trattativa'},
+  {v:'attivo',      l:'Attivo'},
+  {v:'scaduto',     l:'Scaduto'},
+  {v:'perso',       l:'Perso'},
+];
+
+function crmFiltra(){
+  const stato  = document.getElementById('crm-filter-stato')?.value||'';
+  const cat    = document.getElementById('crm-filter-cat')?.value||'';
+  const soc    = document.getElementById('crm-filter-soc')?.value||'';
+  const search = document.getElementById('crm-search')?.value?.toLowerCase()||'';
+  return crmSponsor.filter(s=>{
+    if(stato && s.stato!==stato) return false;
+    if(cat   && s.categoria!==cat) return false;
+    if(soc   && s.soc!==soc) return false;
+    if(search && !s.nome?.toLowerCase().includes(search) && !s.referente?.toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function buildCRM(){
+  const isAdmin = window.currentRuolo==='admin';
+  const lista = crmFiltra();
+
+  // Metriche
+  const attivi   = crmSponsor.filter(s=>s.stato==='attivo');
+  const trattativa = crmSponsor.filter(s=>s.stato==='trattativa').length;
+  const valoreTot  = attivi.reduce((a,s)=>a+(Number(s.valore)||0),0);
+  const inScadenza = crmSponsor.filter(s=>{
+    const g = crmGiorniScadenza(s.scadenza);
+    return s.stato==='attivo' && g!==null && g<=60 && g>=0;
+  }).length;
+  document.getElementById('crm-metrics').innerHTML = `
+    <div class="metric"><div class="metric-label">Sponsor Attivi</div><div class="metric-value">${attivi.length}</div></div>
+    <div class="metric"><div class="metric-label">Valore Portafoglio</div><div class="metric-value" style="color:var(--ricavo)">${fmt(valoreTot)}</div></div>
+    <div class="metric"><div class="metric-label">In Trattativa</div><div class="metric-value">${trattativa}</div></div>
+    <div class="metric"><div class="metric-label">In Scadenza (60gg)</div><div class="metric-value ${inScadenza?'avere':''}" style="${inScadenza?'color:var(--rosso)':''}">${inScadenza}</div></div>`;
+
+  const cont = document.getElementById('crm-container');
+  if(!cont) return;
+
+  if(_crmView==='kanban'){
+    cont.innerHTML = `<div class="kanban-wrap">${CRM_STATI.map(st=>{
+      const carte = lista.filter(s=>s.stato===st.v);
+      return `<div class="kanban-col"><h4>${st.l} (${carte.length})</h4>${carte.map(s=>`
+        <div class="kanban-card" onclick="apriDettaglioSponsor('${s.id}')">
+          <div class="kc-nome">${s.nome}</div>
+          <div class="kc-val">${s.valore?fmt(s.valore):'—'}${s.categoria?' · '+s.categoria:''}</div>
+        </div>`).join('')||'<div style="font-size:10px;color:var(--text3)">—</div>'}</div>`;
+    }).join('')}</div>`;
+    return;
+  }
+
+  if(!lista.length){
+    cont.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuno sponsor trovato</div>';
+    return;
+  }
+
+  cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+    <thead><tr>
+      <th>Sponsor</th><th>Referente</th><th>Categoria</th><th>Stato</th>
+      <th style="text-align:right">Valore/anno</th><th>Scadenza</th><th>Soc.</th><th></th>
+    </tr></thead>
+    <tbody>${lista.map(s=>{
+      const g = crmGiorniScadenza(s.scadenza);
+      const scadWarn = s.stato==='attivo' && g!==null && g<=60;
+      return `<tr>
+        <td style="font-weight:700;cursor:pointer" onclick="apriDettaglioSponsor('${s.id}')">${s.nome}</td>
+        <td>${s.referente||'—'}</td>
+        <td>${s.categoria?`<span class="badge-cat ${s.categoria}">${s.categoria}</span>`:'—'}</td>
+        <td><span class="badge-stato ${s.stato}">${CRM_STATI.find(x=>x.v===s.stato)?.l||s.stato}</span></td>
+        <td class="num">${s.valore?fmt(s.valore):'—'}</td>
+        <td class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️':''):'—'}</td>
+        <td>${s.soc?`<span class="badge-soc badge-${s.soc[0].toLowerCase()}">${s.soc}</span>`:'—'}</td>
+        <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriDettaglioSponsor('${s.id}')">Apri</button></td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+function apriModalSponsor(id){
+  document.getElementById('sp-modal-title').textContent = id ? '✏️ Modifica Sponsor' : '🤝 Nuovo Sponsor';
+  document.getElementById('sp-id').value = id||'';
+  const s = id ? crmSponsor.find(x=>x.id===id) : null;
+  document.getElementById('sp-nome').value      = s?.nome||'';
+  document.getElementById('spn-soc').value      = s?.soc||'';
+  document.getElementById('sp-referente').value = s?.referente||'';
+  document.getElementById('sp-telefono').value  = s?.telefono||'';
+  document.getElementById('sp-email').value     = s?.email||'';
+  document.getElementById('sp-categoria').value = s?.categoria||'bronze';
+  document.getElementById('sp-stato').value     = s?.stato||'lead';
+  document.getElementById('sp-valore').value    = s?.valore||'';
+  document.getElementById('sp-scadenza').value  = s?.scadenza||'';
+  document.getElementById('sp-note').value      = s?.note||'';
+  chiudiModal('modal-sponsor-detail');
+  apriModal('modal-sponsor');
+}
+
+async function salvaSponsor(){
+  const nome = document.getElementById('sp-nome').value.trim();
+  if(!nome){ alert('Inserisci la ragione sociale.'); return; }
+  const id = document.getElementById('sp-id').value;
+  const dati = {
+    nome,
+    soc:        document.getElementById('spn-soc').value,
+    referente:  document.getElementById('sp-referente').value.trim(),
+    telefono:   document.getElementById('sp-telefono').value.trim(),
+    email:      document.getElementById('sp-email').value.trim(),
+    categoria:  document.getElementById('sp-categoria').value,
+    stato:      document.getElementById('sp-stato').value,
+    valore:     Number(document.getElementById('sp-valore').value)||0,
+    scadenza:   document.getElementById('sp-scadenza').value||null,
+    note:       document.getElementById('sp-note').value.trim(),
+    aggiornatoIl: new Date().toISOString(),
+    aggiornatoDa: window._currentUser?.nome||'sistema',
+  };
+  try{
+    if(id){
+      await CRM_REF().doc(id).set(dati,{merge:true});
+    } else {
+      dati.interazioni = [];
+      dati.creatoIl = new Date().toISOString();
+      await CRM_REF().add(dati);
+    }
+    chiudiModal('modal-sponsor');
+    mostraSalvataggio();
+  }catch(e){ alert('Errore salvataggio sponsor: '+e.message); }
+}
+
+function apriDettaglioSponsor(id){
+  const s = crmSponsor.find(x=>x.id===id);
+  if(!s) return;
+  window._crmDettaglioId = id;
+  document.getElementById('spd-title').textContent = '🤝 '+s.nome;
+  const g = crmGiorniScadenza(s.scadenza);
+  const scadWarn = s.stato==='attivo' && g!==null && g<=60;
+  document.getElementById('spd-info').innerHTML = `
+    <b>Referente:</b> ${s.referente||'—'} ${s.telefono?'· 📞 '+s.telefono:''} ${s.email?'· ✉️ '+s.email:''}<br>
+    <b>Categoria:</b> ${s.categoria?`<span class="badge-cat ${s.categoria}">${s.categoria}</span>`:'—'}
+    &nbsp;<b>Stato:</b> <span class="badge-stato ${s.stato}">${CRM_STATI.find(x=>x.v===s.stato)?.l||s.stato}</span><br>
+    <b>Valore/anno:</b> ${s.valore?fmt(s.valore):'—'} &nbsp;
+    <b>Scadenza:</b> <span class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️ in scadenza':''):'—'}</span><br>
+    ${s.note?'<b>Note:</b> '+s.note:''}`;
+  const list = document.getElementById('spd-interazioni-list');
+  const ints = (s.interazioni||[]).slice().sort((a,b)=>new Date(b.data)-new Date(a.data));
+  list.innerHTML = ints.length ? ints.map(i=>`
+    <div class="crm-int-item">
+      <div class="ci-meta">${new Date(i.data).toLocaleString('it-IT')} · ${i.tipo} · ${i.autore||''}</div>
+      <div>${i.testo}</div>
+    </div>`).join('') : '<div style="font-size:11px;color:var(--text3)">Nessuna interazione registrata</div>';
+
+  const btnMod = document.getElementById('spd-modifica-btn');
+  const btnDel = document.getElementById('spd-elimina-btn');
+  btnMod.onclick = ()=>apriModalSponsor(id);
+  btnDel.onclick = ()=>eliminaSponsor(id);
+  apriModal('modal-sponsor-detail');
+}
+
+async function aggiungiInterazione(){
+  const id = window._crmDettaglioId;
+  const testo = document.getElementById('spd-int-testo').value.trim();
+  if(!testo){ alert('Scrivi il contenuto dell\'interazione.'); return; }
+  if(!id) return;
+  const tipo = document.getElementById('spd-int-tipo').value;
+  const nuova = { data:new Date().toISOString(), tipo, testo, autore:window._currentUser?.nome||'sistema' };
+  try{
+    await CRM_REF().doc(id).update({
+      interazioni: firebase.firestore.FieldValue.arrayUnion(nuova)
+    });
+    document.getElementById('spd-int-testo').value='';
+    setTimeout(()=>apriDettaglioSponsor(id), 300); // il listener aggiorna crmSponsor a breve
+  }catch(e){ alert('Errore: '+e.message); }
+}
+
+async function eliminaSponsor(id){
+  const s = crmSponsor.find(x=>x.id===id);
+  if(!confirm(`Eliminare definitivamente "${s?.nome}"? L'operazione non è reversibile.`)) return;
+  try{
+    await CRM_REF().doc(id).delete();
+    chiudiModal('modal-sponsor-detail');
+  }catch(e){ alert('Errore: '+e.message); }
+}
 
 // ── NAVIGAZIONE MODULI ──
 function apriModulo(modulo){
