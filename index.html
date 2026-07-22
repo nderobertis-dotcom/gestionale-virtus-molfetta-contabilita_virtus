@@ -147,6 +147,9 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
 .badge-cat.silver{background:#E4E4E4;color:#444}
 .badge-cat.gold{background:#FCEBB0;color:#8A6D00}
 .badge-cat.platinum{background:#DCEAFB;color:#0D3B6E}
+.badge-cat.title-main{background:#F5DCEA;color:#7A1E52}
+.badge-cat.official{background:#DDEAE0;color:#1A5C38}
+.badge-cat.custom{background:#EDEDED;color:#555}
 .crm-scadenza-warn{color:var(--rosso);font-weight:700}
 .kanban-wrap{display:grid;grid-template-columns:repeat(6,minmax(190px,1fr));gap:.7rem;overflow-x:auto}
 .kanban-col{background:var(--bg3);border-radius:var(--radius);padding:.6rem;min-height:120px}
@@ -342,7 +345,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <div onclick="apriModulo('contratti-doc')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#6B3A00';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
             <div style="font-size:2.5rem;margin-bottom:.8rem">📄</div>
             <div style="font-size:15px;font-weight:800;color:#6B3A00">Contratti</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Sponsorizzazioni · Staff · Roster</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Staff · Roster · Procuratori</div>
           </div>
           <!-- CRM SPONSOR -->
           <div onclick="apriModulo('crm-sponsor')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#8A6D00';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
@@ -388,13 +391,12 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
           <div>
             <div class="page-title">📄 Contratti</div>
-            <div class="page-sub">Sponsorizzazioni · Staff · Roster — Caricamento riservato agli Admin</div>
+            <div class="page-sub">Staff · Roster · Procuratori — Caricamento riservato agli Admin</div>
           </div>
         </div>
       </div>
       <div class="no-print" style="display:flex;gap:.5rem;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:.5rem">
-        <button id="tab-sponsorship" class="btn btn-dark" onclick="switchContratti('sponsorship')">🤝 Sponsorizzazioni</button>
-        <button id="tab-staff" class="btn" onclick="switchContratti('staff')">👥 Staff</button>
+        <button id="tab-staff" class="btn btn-dark" onclick="switchContratti('staff')">👥 Staff</button>
         <button id="tab-roster" class="btn" onclick="switchContratti('roster')">🏀 Roster</button>
         <button id="tab-procuratori" class="btn" onclick="switchContratti('procuratori')">🧑‍💼 Procuratori</button>
       </div>
@@ -439,10 +441,10 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         </select>
         <select id="crm-filter-cat" class="form-input" style="width:auto" onchange="buildCRM()">
           <option value="">Tutte le categorie</option>
-          <option value="bronze">Bronze</option>
-          <option value="silver">Silver</option>
-          <option value="gold">Gold</option>
-          <option value="platinum">Platinum</option>
+          <option value="Title & Main Sponsor">Title & Main Sponsor</option>
+          <option value="Gold">Gold</option>
+          <option value="Silver">Silver</option>
+          <option value="Official">Official</option>
         </select>
         <select id="crm-filter-soc" class="form-input" style="width:auto" onchange="buildCRM()">
           <option value="">Tutte le società</option>
@@ -3173,7 +3175,6 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
       <div class="form-row"><label class="form-label">Tipo</label>
         <select class="form-input" id="uc-tipo">
-          <option value="sponsorship">Sponsorizzazione</option>
           <option value="staff">Staff</option>
           <option value="roster">Roster</option>
           <option value="procuratori">Procuratori</option>
@@ -3228,24 +3229,31 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
     </div>
     <div class="two-col">
+      <div class="form-row"><label class="form-label">Partita IVA</label>
+        <input type="text" class="form-input" id="sp-piva" placeholder="11 cifre" maxlength="16">
+      </div>
       <div class="form-row"><label class="form-label">Referente</label>
         <input type="text" class="form-input" id="sp-referente" placeholder="Nome del contatto">
       </div>
+    </div>
+    <div class="two-col">
       <div class="form-row"><label class="form-label">Telefono</label>
         <input type="text" class="form-input" id="sp-telefono">
       </div>
-    </div>
-    <div class="form-row"><label class="form-label">Email</label>
-      <input type="email" class="form-input" id="sp-email">
+      <div class="form-row"><label class="form-label">Email</label>
+        <input type="email" class="form-input" id="sp-email">
+      </div>
     </div>
     <div class="two-col">
       <div class="form-row"><label class="form-label">Categoria</label>
-        <select class="form-input" id="sp-categoria">
-          <option value="bronze">Bronze</option>
-          <option value="silver">Silver</option>
-          <option value="gold">Gold</option>
-          <option value="platinum">Platinum</option>
+        <select class="form-input" id="sp-categoria" onchange="document.getElementById('sp-categoria-altra').style.display=this.value==='altra'?'block':'none'">
+          <option value="Title & Main Sponsor">Title & Main Sponsor</option>
+          <option value="Gold">Gold</option>
+          <option value="Silver">Silver</option>
+          <option value="Official">Official</option>
+          <option value="altra">+ Altra categoria...</option>
         </select>
+        <input type="text" class="form-input" id="sp-categoria-altra" placeholder="Specifica categoria" style="display:none;margin-top:.4rem">
       </div>
       <div class="form-row"><label class="form-label">Stato trattativa</label>
         <select class="form-input" id="sp-stato">
@@ -3266,6 +3274,14 @@ async function cambiaRuoloUtente(uid,ruolo){
         <input type="date" class="form-input" id="sp-scadenza">
       </div>
     </div>
+    <div class="form-row"><label class="form-label">Logo sponsor</label>
+      <div style="display:flex;align-items:center;gap:.7rem">
+        <img id="sp-logo-preview" style="width:52px;height:52px;border-radius:8px;object-fit:contain;background:var(--bg3);border:.5px solid var(--border);display:none">
+        <input type="file" class="form-input" id="sp-logo-file" accept="image/*" onchange="anteprimaLogoSponsor(event)" style="flex:1">
+        <button type="button" class="btn" id="sp-logo-remove-btn" style="display:none;font-size:11px" onclick="rimuoviLogoSponsor()">✕ Rimuovi</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:.3rem">L'immagine viene ridimensionata automaticamente prima del salvataggio</div>
+    </div>
     <div class="form-row"><label class="form-label">Note</label>
       <textarea class="form-input" id="sp-note" rows="2" placeholder="Note generali sullo sponsor..."></textarea>
     </div>
@@ -3281,6 +3297,12 @@ async function cambiaRuoloUtente(uid,ruolo){
   <div class="modal" style="width:560px">
     <div class="modal-title" id="spd-title">🤝 Sponsor</div>
     <div id="spd-info" style="font-size:12px;color:var(--text2);margin-bottom:.8rem;line-height:1.6"></div>
+
+    <div class="crm-interazioni" style="border-top:1px solid var(--border);padding-top:.8rem;margin-top:0">
+      <label class="form-label">📄 Contratto</label>
+      <div id="spd-contratto-container"></div>
+    </div>
+
     <div class="crm-interazioni">
       <label class="form-label">Nuova interazione</label>
       <div style="display:flex;gap:.5rem;margin-bottom:.6rem;flex-wrap:wrap">
@@ -3311,7 +3333,7 @@ async function cambiaRuoloUtente(uid,ruolo){
 // ══════════════════════════════════════════════════════════════
 let fattureAttive = [];
 let contrattiDoc  = [];
-let _tabContratti = 'sponsorship';
+let _tabContratti = 'staff';
 let crmSponsor    = [];
 let _crmView      = 'tabella';
 
@@ -3351,6 +3373,12 @@ const CRM_STATI = [
   {v:'scaduto',     l:'Scaduto'},
   {v:'perso',       l:'Perso'},
 ];
+
+const CRM_CATEGORIE_STD = ['Title & Main Sponsor','Gold','Silver','Official'];
+function crmCatSlug(cat){
+  const mappa = {'Title & Main Sponsor':'title-main','Gold':'gold','Silver':'silver','Official':'official'};
+  return mappa[cat] || 'custom';
+}
 
 function crmFiltra(){
   const stato  = document.getElementById('crm-filter-stato')?.value||'';
@@ -3392,7 +3420,7 @@ function buildCRM(){
       const carte = lista.filter(s=>s.stato===st.v);
       return `<div class="kanban-col"><h4>${st.l} (${carte.length})</h4>${carte.map(s=>`
         <div class="kanban-card" onclick="apriDettaglioSponsor('${s.id}')">
-          <div class="kc-nome">${s.nome}</div>
+          <div class="kc-nome">${s.logo?`<img src="${s.logo}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;border-radius:3px">`:''}${s.nome}</div>
           <div class="kc-val">${s.valore?fmt(s.valore):'—'}${s.categoria?' · '+s.categoria:''}</div>
         </div>`).join('')||'<div style="font-size:10px;color:var(--text3)">—</div>'}</div>`;
     }).join('')}</div>`;
@@ -3413,9 +3441,9 @@ function buildCRM(){
       const g = crmGiorniScadenza(s.scadenza);
       const scadWarn = s.stato==='attivo' && g!==null && g<=60;
       return `<tr>
-        <td style="font-weight:700;cursor:pointer" onclick="apriDettaglioSponsor('${s.id}')">${s.nome}</td>
+        <td style="font-weight:700;cursor:pointer" onclick="apriDettaglioSponsor('${s.id}')">${s.logo?`<img src="${s.logo}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:6px;border-radius:4px">`:''}${s.nome}</td>
         <td>${s.referente||'—'}</td>
-        <td>${s.categoria?`<span class="badge-cat ${s.categoria}">${s.categoria}</span>`:'—'}</td>
+        <td>${s.categoria?`<span class="badge-cat ${crmCatSlug(s.categoria)}">${s.categoria}</span>`:'—'}</td>
         <td><span class="badge-stato ${s.stato}">${CRM_STATI.find(x=>x.v===s.stato)?.l||s.stato}</span></td>
         <td class="num">${s.valore?fmt(s.valore):'—'}</td>
         <td class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️':''):'—'}</td>
@@ -3431,29 +3459,101 @@ function apriModalSponsor(id){
   const s = id ? crmSponsor.find(x=>x.id===id) : null;
   document.getElementById('sp-nome').value      = s?.nome||'';
   document.getElementById('spn-soc').value      = s?.soc||'';
+  document.getElementById('sp-piva').value      = s?.piva||'';
   document.getElementById('sp-referente').value = s?.referente||'';
   document.getElementById('sp-telefono').value  = s?.telefono||'';
   document.getElementById('sp-email').value     = s?.email||'';
-  document.getElementById('sp-categoria').value = s?.categoria||'bronze';
   document.getElementById('sp-stato').value     = s?.stato||'lead';
   document.getElementById('sp-valore').value    = s?.valore||'';
   document.getElementById('sp-scadenza').value  = s?.scadenza||'';
   document.getElementById('sp-note').value      = s?.note||'';
+
+  // Categoria: se non è una delle standard, seleziona "altra" e valorizza il campo libero
+  const catSel = document.getElementById('sp-categoria');
+  const catAltra = document.getElementById('sp-categoria-altra');
+  if(s?.categoria && !CRM_CATEGORIE_STD.includes(s.categoria)){
+    catSel.value = 'altra';
+    catAltra.value = s.categoria;
+    catAltra.style.display = 'block';
+  } else {
+    catSel.value = s?.categoria || 'Title & Main Sponsor';
+    catAltra.value = '';
+    catAltra.style.display = 'none';
+  }
+
+  // Logo: anteprima se esiste, reset input file (i browser non permettono precompilarlo)
+  document.getElementById('sp-logo-file').value = '';
+  window._sp_logo_base64 = s?.logo || null; // null = nessuna modifica; stringa vuota = rimosso esplicitamente
+  const prev = document.getElementById('sp-logo-preview');
+  if(s?.logo){ prev.src = s.logo; prev.style.display='inline-block'; document.getElementById('sp-logo-remove-btn').style.display='inline-block'; }
+  else{ prev.style.display='none'; document.getElementById('sp-logo-remove-btn').style.display='none'; }
+
   chiudiModal('modal-sponsor-detail');
   apriModal('modal-sponsor');
+}
+
+// Ridimensiona l'immagine (max 240px lato lungo, JPEG 0.8) per non appesantire il documento Firestore
+function resizeImmagineBase64(file, maxSide=240, quality=0.8){
+  return new Promise((res,rej)=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let {width,height} = img;
+        if(width>height && width>maxSide){ height=Math.round(height*maxSide/width); width=maxSide; }
+        else if(height>maxSide){ width=Math.round(width*maxSide/height); height=maxSide; }
+        const canvas = document.createElement('canvas');
+        canvas.width=width; canvas.height=height;
+        canvas.getContext('2d').drawImage(img,0,0,width,height);
+        res(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.onerror = ()=>rej(new Error('Immagine non valida'));
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>rej(new Error('Errore lettura file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function anteprimaLogoSponsor(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  try{
+    const b64 = await resizeImmagineBase64(file);
+    window._sp_logo_base64 = b64;
+    const prev = document.getElementById('sp-logo-preview');
+    prev.src = b64; prev.style.display='inline-block';
+    document.getElementById('sp-logo-remove-btn').style.display='inline-block';
+  }catch(e){ alert('Errore immagine: '+e.message); }
+}
+
+function rimuoviLogoSponsor(){
+  window._sp_logo_base64 = ''; // stringa vuota = rimozione esplicita al salvataggio
+  document.getElementById('sp-logo-file').value = '';
+  document.getElementById('sp-logo-preview').style.display='none';
+  document.getElementById('sp-logo-remove-btn').style.display='none';
 }
 
 async function salvaSponsor(){
   const nome = document.getElementById('sp-nome').value.trim();
   if(!nome){ alert('Inserisci la ragione sociale.'); return; }
   const id = document.getElementById('sp-id').value;
+
+  const catSel = document.getElementById('sp-categoria').value;
+  const categoria = catSel==='altra' ? document.getElementById('sp-categoria-altra').value.trim() : catSel;
+  if(catSel==='altra' && !categoria){ alert('Specifica il nome della categoria personalizzata.'); return; }
+
+  const piva = document.getElementById('sp-piva').value.trim();
+  if(piva && !/^\d{11}$/.test(piva) && !confirm('La Partita IVA non sembra composta da 11 cifre. Salvare comunque?')) return;
+
   const dati = {
     nome,
     soc:        document.getElementById('spn-soc').value,
+    piva,
     referente:  document.getElementById('sp-referente').value.trim(),
     telefono:   document.getElementById('sp-telefono').value.trim(),
     email:      document.getElementById('sp-email').value.trim(),
-    categoria:  document.getElementById('sp-categoria').value,
+    categoria,
     stato:      document.getElementById('sp-stato').value,
     valore:     Number(document.getElementById('sp-valore').value)||0,
     scadenza:   document.getElementById('sp-scadenza').value||null,
@@ -3461,12 +3561,16 @@ async function salvaSponsor(){
     aggiornatoIl: new Date().toISOString(),
     aggiornatoDa: window._currentUser?.nome||'sistema',
   };
+  // window._sp_logo_base64: null = non toccare il campo esistente, '' = rimuovi, stringa = nuovo logo
+  if(window._sp_logo_base64!==null) dati.logo = window._sp_logo_base64;
+
   try{
     if(id){
       await CRM_REF().doc(id).set(dati,{merge:true});
     } else {
       dati.interazioni = [];
       dati.creatoIl = new Date().toISOString();
+      if(!dati.logo) dati.logo = '';
       await CRM_REF().add(dati);
     }
     chiudiModal('modal-sponsor');
@@ -3478,16 +3582,20 @@ function apriDettaglioSponsor(id){
   const s = crmSponsor.find(x=>x.id===id);
   if(!s) return;
   window._crmDettaglioId = id;
-  document.getElementById('spd-title').textContent = '🤝 '+s.nome;
+  document.getElementById('spd-title').innerHTML = (s.logo?`<img src="${s.logo}" style="width:24px;height:24px;object-fit:contain;vertical-align:middle;border-radius:4px;margin-right:.4rem">`:'🤝 ')+s.nome;
   const g = crmGiorniScadenza(s.scadenza);
   const scadWarn = s.stato==='attivo' && g!==null && g<=60;
   document.getElementById('spd-info').innerHTML = `
     <b>Referente:</b> ${s.referente||'—'} ${s.telefono?'· 📞 '+s.telefono:''} ${s.email?'· ✉️ '+s.email:''}<br>
-    <b>Categoria:</b> ${s.categoria?`<span class="badge-cat ${s.categoria}">${s.categoria}</span>`:'—'}
+    ${s.piva?'<b>P.IVA:</b> '+s.piva+'<br>':''}
+    <b>Categoria:</b> ${s.categoria?`<span class="badge-cat ${crmCatSlug(s.categoria)}">${s.categoria}</span>`:'—'}
     &nbsp;<b>Stato:</b> <span class="badge-stato ${s.stato}">${CRM_STATI.find(x=>x.v===s.stato)?.l||s.stato}</span><br>
     <b>Valore/anno:</b> ${s.valore?fmt(s.valore):'—'} &nbsp;
-    <b>Scadenza:</b> <span class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️ in scadenza':''):'—'}</span><br>
+    <b>Scadenza rinnovo:</b> <span class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️':''):'—'}</span><br>
     ${s.note?'<b>Note:</b> '+s.note:''}`;
+
+  renderContrattoSponsor(s);
+
   const list = document.getElementById('spd-interazioni-list');
   const ints = (s.interazioni||[]).slice().sort((a,b)=>new Date(b.data)-new Date(a.data));
   list.innerHTML = ints.length ? ints.map(i=>`
@@ -3501,6 +3609,98 @@ function apriDettaglioSponsor(id){
   btnMod.onclick = ()=>apriModalSponsor(id);
   btnDel.onclick = ()=>eliminaSponsor(id);
   apriModal('modal-sponsor-detail');
+}
+
+// ── CONTRATTO SPONSOR (durata + PDF, sempre a chunk in subcollection dedicata) ──
+function renderContrattoSponsor(s){
+  const cont = document.getElementById('spd-contratto-container');
+  const isAdmin = window.currentRuolo==='admin';
+  const c = s.contratto;
+  if(c && c.nomeFile){
+    cont.innerHTML = `
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">
+        <b>Durata:</b> ${c.dataInizio?fmtData(c.dataInizio):'—'} → ${c.dataFine?fmtData(c.dataFine):'—'}
+        ${c.note?'<br><b>Note contratto:</b> '+c.note:''}
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn" style="font-size:11px" onclick="apriContrattoSponsorPDF('${s.id}')">📄 Apri PDF (${c.nomeFile})</button>
+        ${isAdmin?`<button class="btn-del" onclick="eliminaContrattoSponsor('${s.id}')">✕ Elimina contratto</button>`:''}
+      </div>`;
+  } else {
+    cont.innerHTML = isAdmin ? `
+      <div class="two-col" style="margin-bottom:.5rem">
+        <div class="form-row"><label class="form-label">Dal</label><input type="date" class="form-input" id="spd-c-inizio"></div>
+        <div class="form-row"><label class="form-label">Al</label><input type="date" class="form-input" id="spd-c-fine"></div>
+      </div>
+      <div class="form-row"><input type="text" class="form-input" id="spd-c-note" placeholder="Note contratto (facoltative)"></div>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input type="file" class="form-input" id="spd-c-file" accept=".pdf" style="flex:1">
+        <button class="btn btn-dark" style="font-size:11px" onclick="salvaContrattoSponsor('${s.id}')">Carica contratto</button>
+      </div>
+      <div id="spd-c-progress" style="display:none;margin-top:.4rem;font-size:10px;color:var(--text2)">Caricamento...</div>`
+      : '<div style="font-size:11px;color:var(--text3)">Nessun contratto caricato</div>';
+  }
+}
+
+async function salvaContrattoSponsor(sponsorId){
+  const file = document.getElementById('spd-c-file').files[0];
+  if(!file){ alert('Seleziona un file PDF.'); return; }
+  const dataInizio = document.getElementById('spd-c-inizio').value;
+  const dataFine    = document.getElementById('spd-c-fine').value;
+  const note        = document.getElementById('spd-c-note').value.trim();
+  const prog = document.getElementById('spd-c-progress');
+  prog.style.display='block'; prog.textContent='Lettura file...';
+  try{
+    const b64 = await fileToBase64(file);
+    prog.textContent='Salvataggio su cloud...';
+    const CHUNK = 700000;
+    const nChunk = Math.ceil(b64.length/CHUNK);
+    const ref = CRM_REF().doc(sponsorId);
+    for(let i=0;i<nChunk;i++){
+      await ref.collection('contratto_chunks').doc('chunk_'+i).set({data:b64.slice(i*CHUNK,(i+1)*CHUNK), idx:i});
+    }
+    await ref.update({
+      contratto: { dataInizio:dataInizio||null, dataFine:dataFine||null, note, nomeFile:file.name, nChunk,
+        creatoIl:new Date().toISOString(), creatoDa:window._currentUser?.nome||'sistema' }
+    });
+    prog.textContent='Caricato!';
+    setTimeout(()=>apriDettaglioSponsor(sponsorId), 500);
+  }catch(e){ alert('Errore: '+e.message); prog.style.display='none'; }
+}
+
+async function apriContrattoSponsorPDF(sponsorId){
+  try{
+    const s = crmSponsor.find(x=>x.id===sponsorId);
+    const c = s?.contratto;
+    if(!c){ alert('Contratto non trovato.'); return; }
+    const ref = CRM_REF().doc(sponsorId);
+    const chunks = [];
+    for(let i=0;i<c.nChunk;i++){
+      const cs = await ref.collection('contratto_chunks').doc('chunk_'+i).get();
+      if(cs.exists) chunks.push(cs.data().data);
+    }
+    const b64 = chunks.join('');
+    const byteStr = atob(b64.split(',')[1]||b64);
+    const ab = new ArrayBuffer(byteStr.length);
+    const ia = new Uint8Array(ab);
+    for(let i=0;i<byteStr.length;i++) ia[i]=byteStr.charCodeAt(i);
+    const blob = new Blob([ab],{type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    window.open(url,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }catch(e){ alert('Errore apertura contratto: '+e.message); }
+}
+
+async function eliminaContrattoSponsor(sponsorId){
+  if(!confirm('Eliminare il contratto caricato per questo sponsor?')) return;
+  try{
+    const s = crmSponsor.find(x=>x.id===sponsorId);
+    const nChunk = s?.contratto?.nChunk||0;
+    const ref = CRM_REF().doc(sponsorId);
+    for(let i=0;i<nChunk;i++){ await ref.collection('contratto_chunks').doc('chunk_'+i).delete(); }
+    await ref.update({ contratto: firebase.firestore.FieldValue.delete() });
+    setTimeout(()=>apriDettaglioSponsor(sponsorId), 300);
+  }catch(e){ alert('Errore: '+e.message); }
 }
 
 async function aggiungiInterazione(){
@@ -3670,7 +3870,7 @@ async function caricaContrattiDoc(){
 
 function switchContratti(tab){
   _tabContratti = tab;
-  ['sponsorship','staff','roster','procuratori'].forEach(t=>{
+  ['staff','roster','procuratori'].forEach(t=>{
     const btn = document.getElementById('tab-'+t);
     if(btn){ btn.className = t===tab ? 'btn btn-dark' : 'btn'; }
   });
@@ -3692,7 +3892,7 @@ function buildContrattiDoc(){
   const cont = document.getElementById('co-container');
   if(!cont) return;
 
-  const titoliTab = {sponsorship:'Sponsorizzazioni',staff:'Contratti Staff',roster:'Roster',procuratori:'Procuratori'};
+  const titoliTab = {staff:'Contratti Staff',roster:'Roster',procuratori:'Procuratori'};
 
   if(!lista.length){
     cont.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--text3)">Nessun contratto in "${titoliTab[_tabContratti]}"</div>`;
