@@ -1560,7 +1560,7 @@ function buildMastrini(){
         <span>${conto.codice} — ${conto.nome}</span>
         <div style="display:flex;align-items:center;gap:.6rem">
           <span>Saldo: ${fmt(Math.abs(saldo))} ${saldoLabel}</span>
-          ${isContoRateabile(conto.id)?`<button style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:inherit" onclick="apriModalRateazionePerConto('${conto.id}')">📅 Piano rate</button>`:''}
+          ${isContoRateabile(conto.id)?`<button style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:inherit" onclick="apriModalRateazionePerConto('${conto.id}','${filtSoc}')">📅 Piano rate</button>`:''}
         </div>
       </div>
       <div class="mastrino-body" style="grid-template-columns:auto 1fr 120px 120px 120px 60px">
@@ -1650,27 +1650,43 @@ function apriModalRateazionePerPianoId(pianoId){
   apriModalRateazione(piano.regId, piano.contoId, costruisciOverrideDaPiano(piano));
 }
 
-function apriModalRateazionePerConto(contoId){
-  // Cerca il piano più recente per questo conto
-  const piani = pianiRateazione.filter(p=>p.contoId===contoId);
+function apriModalRateazionePerConto(contoId, socHint){
+  // Cerca il piano più recente per questo conto — se conosciamo la società, restringiamo a quella
+  // (lo stesso conto generico, es. "Altri debiti", può avere piani separati su più società)
+  const piani = pianiRateazione.filter(p=>p.contoId===contoId && (!socHint || p.soc===socHint));
   if(piani.length>0){
     const piano = piani[piani.length-1];
     apriModalRateazione(piano.regId, contoId, costruisciOverrideDaPiano(piano));
   } else {
-    // Crea nuovo piano calcolando il saldo del conto
-    const saldo = Math.abs(calcolaSaldoConto(contoId));
+    // Determina la società: usa quella filtrata in Mastrini; se non c'è un filtro attivo,
+    // prova a dedurla dai movimenti — se il conto è condiviso da più società, non possiamo
+    // indovinare, meglio chiedere di filtrare prima (altrimenti il saldo e la società
+    // finirebbero mescolati o assegnati a caso).
+    let soc = socHint || '';
+    if(!soc){
+      const socMovimenti = new Set([
+        ...registrazioni.filter(r=>r.righe.some(rg=>rg.contoId===contoId)).map(r=>r.soc),
+        ...bilancioApertura.filter(b=>b.contoId===contoId).map(b=>b.soc)
+      ].filter(Boolean));
+      if(socMovimenti.size===1) soc = [...socMovimenti][0];
+      else { alert('Questo conto ha movimenti su più società. Seleziona una società nel filtro di Mastrini prima di creare il piano rate, altrimenti non posso sapere a quale intestarlo.'); return; }
+    }
+    const saldo = Math.abs(calcolaSaldoConto(contoId, soc));
     const tipo = getTipoRateazione(contoId)||'incasso';
     const nomeConto = getNomeContoById(contoId);
-    apriModalRateazione('__manuale__', contoId, { importoTot:saldo, tipo, soc:'VIRTUS', desc:nomeConto });
+    // regId include soc+conto: così due società con lo stesso conto generico
+    // ottengono piani distinti invece di sovrascriversi a vicenda al salvataggio
+    const regId = 'manuale_'+soc+'_'+contoId;
+    apriModalRateazione(regId, contoId, { importoTot:saldo, tipo, soc, desc:nomeConto });
   }
 }
 
-function calcolaSaldoConto(contoId){
+function calcolaSaldoConto(contoId, soc){
   const conto = pianoConti.find(c=>c.id===contoId);
   const cl = parseInt(conto?.classe||conto?.codice?.split('.')[0]);
   let totD=0, totA=0;
-  registrazioni.forEach(r=>r.righe.filter(rg=>rg.contoId===contoId).forEach(rg=>{totD+=rg.dare||0;totA+=rg.avere||0;}));
-  bilancioApertura.filter(b=>b.contoId===contoId).forEach(b=>{totD+=b.dare||0;totA+=b.avere||0;});
+  registrazioni.filter(r=>!soc||r.soc===soc).forEach(r=>r.righe.filter(rg=>rg.contoId===contoId).forEach(rg=>{totD+=rg.dare||0;totA+=rg.avere||0;}));
+  bilancioApertura.filter(b=>b.contoId===contoId&&(!soc||b.soc===soc)).forEach(b=>{totD+=b.dare||0;totA+=b.avere||0;});
   return cl===1 ? totD-totA : totA-totD;
 }
 
@@ -2475,7 +2491,7 @@ function convertiInPiano(scadId){
   const pianoId = genId();
   const piano = {
     id: pianoId,
-    regId:  s.regId || '__singola__',
+    regId:  s.regId || ('singola_'+s.id),
     contoId: s.contoId,
     tipo:   s.tipo==='credito' ? 'incasso' : 'pagamento',
     soc:    s.soc,
