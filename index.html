@@ -2337,6 +2337,12 @@ function buildScadenzarioSintetico(){
     })
     .filter(Boolean);
 
+  // Totali mensili attivo/passivo (sulle scadenze del mese, non sul totale del piano)
+  const totAttivo  = colonne.map((_,i)=>righe.filter(r=>r.piano.tipo==='incasso').reduce((s,r)=>s+r.celle[i].importo,0));
+  const totPassivo = colonne.map((_,i)=>righe.filter(r=>r.piano.tipo==='pagamento').reduce((s,r)=>s+r.celle[i].importo,0));
+  const totAttivoNP  = contiNonPianificati.filter(cn=>getTipoRateazione(cn.conto.id)==='incasso').reduce((s,cn)=>s+Math.abs(cn.saldo),0);
+  const totPassivoNP = contiNonPianificati.filter(cn=>getTipoRateazione(cn.conto.id)==='pagamento').reduce((s,cn)=>s+Math.abs(cn.saldo),0);
+
   const wrap = document.getElementById('scad-sintetico-wrap');
   if(!righe.length && !contiNonPianificati.length){
     wrap.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuna voce da mostrare con questi filtri</div>';
@@ -2350,6 +2356,16 @@ function buildScadenzarioSintetico(){
       <th style="text-align:right;min-width:110px;background:var(--bg3);color:var(--text1)">Non pianificato</th>
     </tr></thead>
     <tbody>
+      <tr style="background:var(--bg3)">
+        <td style="position:sticky;left:0;background:var(--bg3);font-weight:700;font-size:11px;color:var(--dare)">▲ Totale attivo</td>
+        ${totAttivo.map(v=>`<td style="text-align:right;font-weight:700;color:var(--dare)">${v>0?fmt(v):'—'}</td>`).join('')}
+        <td style="text-align:right;font-weight:700;color:var(--dare)">${totAttivoNP>0?fmt(totAttivoNP):'—'}</td>
+      </tr>
+      <tr style="background:var(--bg3);border-bottom:2px solid var(--border)">
+        <td style="position:sticky;left:0;background:var(--bg3);font-weight:700;font-size:11px;color:var(--rosso)">▼ Totale passivo</td>
+        ${totPassivo.map(v=>`<td style="text-align:right;font-weight:700;color:var(--rosso)">${v>0?fmt(v):'—'}</td>`).join('')}
+        <td style="text-align:right;font-weight:700;color:var(--rosso)">${totPassivoNP>0?fmt(totPassivoNP):'—'}</td>
+      </tr>
       ${righe.map(r=>{
         const conto = pianoConti.find(c=>c.id===r.piano.contoId);
         const tipoBadge = r.piano.tipo==='incasso' ? '<span class="badge-stato attivo">Credito</span>' : '<span class="badge-stato scaduto">Debito</span>';
