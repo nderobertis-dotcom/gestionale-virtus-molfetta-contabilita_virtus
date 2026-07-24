@@ -161,6 +161,13 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
 .crm-interazioni{border-top:1px solid var(--border);margin-top:1rem;padding-top:.8rem}
 .crm-int-item{background:var(--bg);border-radius:6px;padding:.5rem .7rem;margin-bottom:.5rem;font-size:11px}
 .crm-int-item .ci-meta{color:var(--text3);font-size:10px;margin-bottom:2px}
+.att-cat-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--text2);background:var(--bg3);padding:4px 6px;margin-top:.4rem;border-radius:4px}
+.att-riga{display:grid;grid-template-columns:26px 1fr 90px;gap:.4rem;align-items:center;padding:4px 2px;border-bottom:.5px solid var(--border)}
+.att-riga select.form-input{font-size:10px;padding:3px 4px}
+.att-riga-extra{display:none;grid-template-columns:1fr 1fr 1fr;gap:.4rem;padding:2px 2px 6px 30px}
+.att-riga-extra.open{display:grid}
+.att-riga-extra input{font-size:10px;padding:3px 5px}
+.att-badge-mini{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text2)}
 
 /* ── LOGIN ── */
 #login-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
@@ -3348,13 +3355,24 @@ async function cambiaRuoloUtente(uid,ruolo){
 
 <!-- ── MODAL DETTAGLIO SPONSOR (storico interazioni) ── -->
 <div class="modal-overlay" id="modal-sponsor-detail" onclick="if(event.target===this)chiudiModal('modal-sponsor-detail')">
-  <div class="modal" style="width:560px">
+  <div class="modal" style="width:640px">
     <div class="modal-title" id="spd-title">🤝 Sponsor</div>
     <div id="spd-info" style="font-size:12px;color:var(--text2);margin-bottom:.8rem;line-height:1.6"></div>
 
     <div class="crm-interazioni" style="border-top:1px solid var(--border);padding-top:.8rem;margin-top:0">
       <label class="form-label">📄 Contratto</label>
       <div id="spd-contratto-container"></div>
+    </div>
+
+    <div class="crm-interazioni">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+        <label class="form-label" style="margin-bottom:0">📋 Attivazioni sponsor</label>
+        <span id="spd-att-conteggio" style="font-size:11px;font-weight:700;color:var(--text2)"></span>
+      </div>
+      <div id="spd-attivazioni-container" style="max-height:280px;overflow-y:auto;overflow-x:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
+      <div style="text-align:right;margin-top:.5rem">
+        <button class="btn btn-dark perm-admin" style="font-size:11px" onclick="salvaAttivazioniSponsor()">💾 Salva attivazioni</button>
+      </div>
     </div>
 
     <div class="crm-interazioni">
@@ -3434,6 +3452,39 @@ function crmCatSlug(cat){
   return mappa[cat] || 'custom';
 }
 
+// Catalogo standard delle attività di attivazione sponsor (Digital/Broadcast/Media/Team/Hospitality)
+const CRM_ATTIVITA_CATALOGO = [
+  {id:'D1',cat:'Digital',nome:'Logo sul sito'},
+  {id:'D2',cat:'Digital',nome:'Link sito sponsor'},
+  {id:'D3',cat:'Digital',nome:'Post presentazione'},
+  {id:'D4',cat:'Digital',nome:'Social continuativi'},
+  {id:'D5',cat:'Digital',nome:'Newsletter'},
+  {id:'B1',cat:'Broadcast',nome:'Logo streaming'},
+  {id:'B2',cat:'Broadcast',nome:'Banner in game'},
+  {id:'B3',cat:'Broadcast',nome:'Highlights'},
+  {id:'B4',cat:'Broadcast',nome:'Naming streaming'},
+  {id:'M1',cat:'Media',nome:'Locandine'},
+  {id:'M2',cat:'Media',nome:'Naming locandine'},
+  {id:'M3',cat:'Media',nome:'Backdrop'},
+  {id:'M4',cat:'Media',nome:'Comunicati'},
+  {id:'T1',cat:'Team',nome:'Logo maglia'},
+  {id:'T2',cat:'Team',nome:'Capo tecnico'},
+  {id:'T3',cat:'Team',nome:'Speaker'},
+  {id:'T4',cat:'Team',nome:'Uso immagine squadra'},
+  {id:'H1',cat:'Hospitality',nome:'Accrediti'},
+  {id:'H2',cat:'Hospitality',nome:'Networking'},
+  {id:'H3',cat:'Hospitality',nome:'Prelazione rinnovo'},
+  {id:'H4',cat:'Hospitality',nome:'Nuovi spazi'},
+];
+const CRM_ATTIVITA_ICONE = {Digital:'💻',Broadcast:'📡',Media:'📰',Team:'🏀',Hospitality:'🎟️'};
+
+function crmContaAttivazioniCompletate(s){
+  const att = s.attivazioni||{};
+  const tot = CRM_ATTIVITA_CATALOGO.length;
+  const fatte = CRM_ATTIVITA_CATALOGO.filter(a=>att[a.id]?.stato==='completata').length;
+  return {fatte, tot};
+}
+
 function crmFiltra(){
   const stato  = document.getElementById('crm-filter-stato')?.value||'';
   const cat    = document.getElementById('crm-filter-cat')?.value||'';
@@ -3475,7 +3526,7 @@ function buildCRM(){
       return `<div class="kanban-col"><h4>${st.l} (${carte.length})</h4>${carte.map(s=>`
         <div class="kanban-card" onclick="apriDettaglioSponsor('${s.id}')">
           <div class="kc-nome">${s.logo?`<img src="${s.logo}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:4px;border-radius:3px">`:''}${s.nome}</div>
-          <div class="kc-val">${s.valore?fmt(s.valore):'—'}${s.categoria?' · '+s.categoria:''}</div>
+          <div class="kc-val">${s.valore?fmt(s.valore):'—'}${s.categoria?' · '+s.categoria:''} · 📋 ${crmContaAttivazioniCompletate(s).fatte}/${crmContaAttivazioniCompletate(s).tot}</div>
         </div>`).join('')||'<div style="font-size:10px;color:var(--text3)">—</div>'}</div>`;
     }).join('')}</div>`;
     return;
@@ -3489,11 +3540,12 @@ function buildCRM(){
   cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
     <thead><tr>
       <th>Sponsor</th><th>Referente</th><th>Categoria</th><th>Stato</th>
-      <th style="text-align:right">Valore/anno</th><th>Scadenza</th><th>Soc.</th><th></th>
+      <th style="text-align:right">Valore/anno</th><th>Scadenza</th><th>Soc.</th><th>Attivazioni</th><th></th>
     </tr></thead>
     <tbody>${lista.map(s=>{
       const g = crmGiorniScadenza(s.scadenza);
       const scadWarn = s.stato==='attivo' && g!==null && g<=60;
+      const {fatte,tot} = crmContaAttivazioniCompletate(s);
       return `<tr>
         <td style="font-weight:700;cursor:pointer" onclick="apriDettaglioSponsor('${s.id}')">${s.logo?`<img src="${s.logo}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;margin-right:6px;border-radius:4px">`:''}${s.nome}</td>
         <td>${s.referente||'—'}</td>
@@ -3502,6 +3554,7 @@ function buildCRM(){
         <td class="num">${s.valore?fmt(s.valore):'—'}</td>
         <td class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️':''):'—'}</td>
         <td>${s.soc?`<span class="badge-soc badge-${s.soc[0].toLowerCase()}">${s.soc}</span>`:'—'}</td>
+        <td><span class="att-badge-mini" style="${fatte===tot&&tot>0?'background:#C6EFCE;color:#1A5C38':''}">${fatte}/${tot}</span></td>
         <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriDettaglioSponsor('${s.id}')">Apri</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
@@ -3636,6 +3689,7 @@ function apriDettaglioSponsor(id){
   const s = crmSponsor.find(x=>x.id===id);
   if(!s) return;
   window._crmDettaglioId = id;
+  window._attivazioniPending = {}; // eventuali modifiche non salvate di un altro sponsor non devono "scivolare" qui
   document.getElementById('spd-title').innerHTML = (s.logo?`<img src="${s.logo}" style="width:24px;height:24px;object-fit:contain;vertical-align:middle;border-radius:4px;margin-right:.4rem">`:'🤝 ')+s.nome;
   const g = crmGiorniScadenza(s.scadenza);
   const scadWarn = s.stato==='attivo' && g!==null && g<=60;
@@ -3649,6 +3703,7 @@ function apriDettaglioSponsor(id){
     ${s.note?'<b>Note:</b> '+s.note:''}`;
 
   renderContrattoSponsor(s);
+  renderAttivazioniSponsor(s);
 
   const list = document.getElementById('spd-interazioni-list');
   const ints = (s.interazioni||[]).slice().sort((a,b)=>new Date(b.data)-new Date(a.data));
@@ -3771,6 +3826,70 @@ async function aggiungiInterazione(){
     document.getElementById('spd-int-testo').value='';
     setTimeout(()=>apriDettaglioSponsor(id), 300); // il listener aggiorna crmSponsor a breve
   }catch(e){ alert('Errore: '+e.message); }
+}
+
+// ── ATTIVAZIONI SPONSOR (catalogo fisso da PDF, stato calcolato dalle date) ──
+function crmStatoAttivazione(a){
+  if(a?.dataCompletata) return {l:'✅ Fatta', c:'#1A5C38', bg:'#C6EFCE'};
+  if(a?.dataPrevista && a.dataPrevista < new Date().toISOString().slice(0,10)) return {l:'⚠️ In ritardo', c:'#943126', bg:'#FDEBD0'};
+  if(a?.dataPrevista || a?.responsabile) return {l:'🔵 In corso', c:'#1565C0', bg:'#E3F2FD'};
+  return {l:'— Da fare', c:'#888', bg:'#F0F0F0'};
+}
+
+function renderAttivazioniSponsor(s){
+  const isAdmin = window.currentRuolo==='admin';
+  const att = s.attivazioni||{};
+  const {fatte, tot} = crmContaAttivazioniCompletate(s);
+  document.getElementById('spd-att-conteggio').textContent = `${fatte}/${tot} completate`;
+
+  const categorie = ['Digital','Broadcast','Media','Team','Hospitality'];
+  const cont = document.getElementById('spd-attivazioni-container');
+  cont.innerHTML = categorie.map(cat=>{
+    const voci = CRM_ATTIVITA_CATALOGO.filter(a=>a.cat===cat);
+    return `<div class="att-cat-header">${CRM_ATTIVITA_ICONE[cat]} ${cat}</div>` + voci.map(a=>{
+      const v = att[a.id]||{};
+      const st = crmStatoAttivazione(v);
+      return `
+      <div class="att-riga">
+        <span class="att-badge-mini">${a.id}</span>
+        <span style="font-size:11px">${a.nome}</span>
+        <span class="att-badge-mini" style="background:${st.bg};color:${st.c}">${st.l}</span>
+      </div>
+      <div class="att-riga-extra" style="display:grid">
+        <input type="text" class="form-input" placeholder="Responsabile" value="${v.responsabile||''}"
+          ${isAdmin?'':'disabled'} onchange="_attEdit('${a.id}','responsabile',this.value)">
+        <input type="date" class="form-input" title="Data prevista" value="${v.dataPrevista||''}"
+          ${isAdmin?'':'disabled'} onchange="_attEdit('${a.id}','dataPrevista',this.value)">
+        <input type="date" class="form-input" title="Data completata" value="${v.dataCompletata||''}"
+          ${isAdmin?'':'disabled'} onchange="_attEdit('${a.id}','dataCompletata',this.value)">
+      </div>`;
+    }).join('');
+  }).join('');
+}
+
+// Tiene in memoria le modifiche non ancora salvate (un solo salvataggio per tutte le 21 voci,
+// invece di una scrittura Firestore ad ogni singolo campo modificato)
+window._attivazioniPending = {};
+function _attEdit(attId, campo, valore){
+  if(!window._attivazioniPending[attId]) window._attivazioniPending[attId] = {};
+  window._attivazioniPending[attId][campo] = valore;
+}
+
+async function salvaAttivazioniSponsor(){
+  const id = window._crmDettaglioId;
+  if(!id) return;
+  const s = crmSponsor.find(x=>x.id===id);
+  if(!s) return;
+  const attivazioni = {...(s.attivazioni||{})};
+  Object.entries(window._attivazioniPending).forEach(([attId, campi])=>{
+    attivazioni[attId] = {...(attivazioni[attId]||{}), ...campi};
+    // Se si toglie la data completata, lo stato torna automaticamente indietro (nessun flag separato da disallineare)
+  });
+  try{
+    await CRM_REF().doc(id).set({attivazioni},{merge:true});
+    window._attivazioniPending = {};
+    mostraSalvataggio();
+  }catch(e){ alert('Errore salvataggio attivazioni: '+e.message); }
 }
 
 async function eliminaSponsor(id){
