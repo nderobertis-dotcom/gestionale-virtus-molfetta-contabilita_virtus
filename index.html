@@ -575,6 +575,13 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <div class="page-sub">Crediti e debiti con scadenza — da registrazioni con data scadenza</div>
       <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('scadenzario')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
       </div>
+
+      <div class="crm-toggle no-print">
+        <button class="btn active" id="scad-view-dettaglio" onclick="scadSwitchView('dettaglio')">📋 Dettaglio</button>
+        <button class="btn" id="scad-view-sintetico" onclick="scadSwitchView('sintetico')">📊 Sintetico</button>
+      </div>
+
+      <div id="scad-dettaglio-container">
       <div class="toolbar">
         <select id="scad-soc" class="form-input" style="width:auto" onchange="buildScadenzario()">
           <option value="">Tutte le società</option>
@@ -631,6 +638,25 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           </thead>
           <tbody id="tbody-scadenzario"></tbody>
         </table>
+      </div>
+      </div>
+
+      <div id="scad-sintetico-container" style="display:none">
+        <div class="toolbar">
+          <select id="scads-soc" class="form-input" style="width:auto" onchange="buildScadenzarioSintetico()">
+            <option value="">Tutte le società</option>
+            <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+          </select>
+          <select id="scads-tipo" class="form-input" style="width:auto" onchange="buildScadenzarioSintetico()">
+            <option value="">Crediti e debiti</option>
+            <option value="credito">Solo crediti</option>
+            <option value="debito">Solo debiti</option>
+          </select>
+        </div>
+        <div id="scad-sintetico-legenda" style="font-size:10px;color:var(--text3);margin-bottom:.5rem">
+          Le 12 colonne mensili partono sempre dal mese corrente e scorrono in avanti — quando un mese si esaurisce, la finestra si sposta automaticamente. L'ultima colonna raggruppa il residuo di conti/voci senza un piano di rateazione collegato.
+        </div>
+        <div id="scad-sintetico-wrap" class="tbl-wrap scrollx"></div>
       </div>
     </div>
 
@@ -972,7 +998,7 @@ function showPage(id, el){
     'mastrini': buildMastrini,
     'bilancio-apertura': renderBilancioApertura,
     'conto-economico': buildContoEconomico,
-    'scadenzario': buildScadenzario,
+    'scadenzario': buildScadenzarioPagina,
     'situazione-patrimoniale': buildSituazionePatrimoniale,
     'piano-conti': renderPianoConti,
     'utenti': caricaUtenti,
@@ -2229,6 +2255,125 @@ function aggiorniFiltroControparte(){
     }
   });
   sel.innerHTML = opts.map(([v,l])=>`<option value="${v}"${v===val?'selected':''}>${l}</option>`).join('');
+}
+
+let _scadView = 'dettaglio';
+function scadSwitchView(v){
+  _scadView = v;
+  document.getElementById('scad-view-dettaglio').classList.toggle('active', v==='dettaglio');
+  document.getElementById('scad-view-sintetico').classList.toggle('active', v==='sintetico');
+  document.getElementById('scad-dettaglio-container').style.display = v==='dettaglio'?'':'none';
+  document.getElementById('scad-sintetico-container').style.display = v==='sintetico'?'':'none';
+  buildScadenzarioPagina();
+}
+function buildScadenzarioPagina(){
+  if(_scadView==='sintetico') buildScadenzarioSintetico();
+  else buildScadenzario();
+}
+
+// ── SCADENZARIO SINTETICO: una riga per piano di rateazione, 12 colonne mensili
+// scorrevoli a partire dal mese corrente, ultima colonna per conti senza piano ──
+function buildScadenzarioSintetico(){
+  const filtSoc  = document.getElementById('scads-soc')?.value||'';
+  const filtTipo = document.getElementById('scads-tipo')?.value||''; // 'credito'|'debito'|''
+  const oggi = new Date();
+  const meseBase = oggi.getMonth(), annoBase = oggi.getFullYear();
+  const MESI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+  // Finestra di 12 mesi dinamica: parte sempre dal mese corrente, indipendentemente
+  // dalla stagione sportiva — quando il mese corrente cambia (es. da luglio ad agosto)
+  // questa finestra si ricalcola da sola al prossimo render, senza bisogno di un reset esplicito.
+  const colonne = [];
+  for(let i=0;i<12;i++){
+    const m = (meseBase+i)%12;
+    const y = annoBase + Math.floor((meseBase+i)/12);
+    colonne.push({ y, m, label: MESI[m]+' '+String(y).slice(2) });
+  }
+
+  const tipoMatch = (piano)=> !filtTipo || (filtTipo==='credito' ? piano.tipo==='incasso' : piano.tipo==='pagamento');
+
+  // Righe: una per ogni piano di rateazione con residuo ancora aperto
+  const righe = pianiRateazione
+    .filter(p=>(!filtSoc||p.soc===filtSoc) && tipoMatch(p))
+    .map(piano=>{
+      const celle = colonne.map(()=>({importo:0, giorni:[], scaduto:false}));
+      let residuoTot = 0, primaScadenzaAperta = null;
+      piano.rate.forEach(r=>{
+        const residuo = (r.importo||0)-(r.saldato||0);
+        if(residuo<=0.005) return;
+        residuoTot += residuo;
+        const d = new Date(r.scadenza);
+        const idx = colonne.findIndex(c=>c.y===d.getFullYear()&&c.m===d.getMonth());
+        const scaduto = r.scadenza < oggi.toISOString().slice(0,10);
+        if(idx>=0){
+          celle[idx].importo += residuo;
+          celle[idx].giorni.push(d.getDate());
+          if(scaduto) celle[idx].scaduto = true;
+        }
+        if(!primaScadenzaAperta || r.scadenza<primaScadenzaAperta) primaScadenzaAperta = r.scadenza;
+      });
+      return { piano, celle, residuoTot, primaScadenzaAperta };
+    })
+    .filter(r=>r.residuoTot>0.005)
+    .sort((a,b)=>(a.primaScadenzaAperta||'9999').localeCompare(b.primaScadenzaAperta||'9999'));
+
+  // Ultima colonna: conti rateizzabili che non hanno NEMMENO UN piano di rateazione collegato.
+  // Nota: se un conto ha già un piano su una parte del saldo ma un'altra parte è ancora libera,
+  // questo calcolo semplice non separa le due quote — l'intero conto risulta "pianificato"
+  // appena esiste almeno un piano. Se ti serve la scomposizione anche in quel caso, dimmelo.
+  const contiNonPianificati = pianoConti
+    .filter(c=>isContoRateabile(c.id))
+    .filter(c=>{
+      const tipoC = getTipoRateazione(c.id);
+      if(filtTipo && ((filtTipo==='credito'&&tipoC!=='incasso')||(filtTipo==='debito'&&tipoC!=='pagamento'))) return false;
+      return true;
+    })
+    .map(c=>{
+      const haPiano = pianiRateazione.some(p=>p.contoId===c.id && (!filtSoc||p.soc===filtSoc));
+      if(haPiano) return null;
+      const saldo = calcolaSaldoConto(c.id, filtSoc||undefined);
+      if(Math.abs(saldo)<0.005) return null;
+      return { conto:c, saldo };
+    })
+    .filter(Boolean);
+
+  const wrap = document.getElementById('scad-sintetico-wrap');
+  if(!righe.length && !contiNonPianificati.length){
+    wrap.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuna voce da mostrare con questi filtri</div>';
+    return;
+  }
+
+  wrap.innerHTML = `<table class="scad-sint-table">
+    <thead><tr>
+      <th style="position:sticky;left:0;background:var(--bg2);color:var(--text1);min-width:220px">Voce</th>
+      ${colonne.map(c=>`<th style="text-align:right;min-width:90px">${c.label}</th>`).join('')}
+      <th style="text-align:right;min-width:110px;background:var(--bg3);color:var(--text1)">Non pianificato</th>
+    </tr></thead>
+    <tbody>
+      ${righe.map(r=>{
+        const conto = pianoConti.find(c=>c.id===r.piano.contoId);
+        const tipoBadge = r.piano.tipo==='incasso' ? '<span class="badge-stato attivo">Credito</span>' : '<span class="badge-stato scaduto">Debito</span>';
+        return `<tr>
+          <td style="position:sticky;left:0;background:var(--bg2);font-size:11px">
+            ${tipoBadge} ${r.piano.soc?`<span class="badge-soc badge-${r.piano.soc[0].toLowerCase()}">${r.piano.soc}</span>`:''}
+            <br><b>${conto?conto.nome:'—'}</b> ${r.piano.desc?'— '+r.piano.desc:''}
+          </td>
+          ${r.celle.map(cel=>cel.importo>0
+            ? `<td style="text-align:right;font-size:11px;${cel.scaduto?'color:var(--rosso);font-weight:700':''}">${fmt(cel.importo)}<br><span style="font-size:9px;color:var(--text3)">gg ${cel.giorni.join('/')}</span></td>`
+            : `<td style="text-align:right;color:var(--text3)">—</td>`
+          ).join('')}
+          <td style="text-align:right;color:var(--text3);background:var(--bg3)">—</td>
+        </tr>`;
+      }).join('')}
+      ${contiNonPianificati.map(cn=>`<tr>
+        <td style="position:sticky;left:0;background:var(--bg2);font-size:11px">
+          <span class="badge-stato lead">Senza piano</span> <b>${cn.conto.nome}</b>
+        </td>
+        ${colonne.map(()=>`<td style="text-align:right;color:var(--text3)">—</td>`).join('')}
+        <td style="text-align:right;font-weight:700;background:var(--bg3)">${fmt(Math.abs(cn.saldo))}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
 }
 
 function buildScadenzario(){
