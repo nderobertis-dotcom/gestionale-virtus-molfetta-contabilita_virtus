@@ -3709,36 +3709,53 @@ function crmCatSlug(cat){
   return mappa[cat] || 'custom';
 }
 
-// Catalogo standard delle attività di attivazione sponsor (Digital/Broadcast/Media/Team/Hospitality)
+// Catalogo attivazioni sponsor — sostituisce il vecchio elenco generico.
+// Ogni voce elenca le categorie sponsor che vi hanno diritto secondo la matrice
+// comparativa (Title & Main / Gold / Silver / Official). Per una categoria
+// personalizzata (non tra le 4 standard) si considerano tutte le voci applicabili,
+// perché la matrice non può sapere a cosa ha diritto una categoria inventata.
+const CRM_TM='Title & Main Sponsor', CRM_G='Gold', CRM_S='Silver', CRM_O='Official';
 const CRM_ATTIVITA_CATALOGO = [
-  {id:'D1',cat:'Digital',nome:'Logo sul sito'},
-  {id:'D2',cat:'Digital',nome:'Link sito sponsor'},
-  {id:'D3',cat:'Digital',nome:'Post presentazione'},
-  {id:'D4',cat:'Digital',nome:'Social continuativi'},
-  {id:'D5',cat:'Digital',nome:'Newsletter'},
-  {id:'B1',cat:'Broadcast',nome:'Logo streaming'},
-  {id:'B2',cat:'Broadcast',nome:'Banner in game'},
-  {id:'B3',cat:'Broadcast',nome:'Highlights'},
-  {id:'B4',cat:'Broadcast',nome:'Naming streaming'},
-  {id:'M1',cat:'Media',nome:'Locandine'},
-  {id:'M2',cat:'Media',nome:'Naming locandine'},
-  {id:'M3',cat:'Media',nome:'Backdrop'},
-  {id:'M4',cat:'Media',nome:'Comunicati'},
-  {id:'T1',cat:'Team',nome:'Logo maglia'},
-  {id:'T2',cat:'Team',nome:'Capo tecnico'},
-  {id:'T3',cat:'Team',nome:'Speaker'},
-  {id:'T4',cat:'Team',nome:'Uso immagine squadra'},
-  {id:'H1',cat:'Hospitality',nome:'Accrediti'},
-  {id:'H2',cat:'Hospitality',nome:'Networking'},
-  {id:'H3',cat:'Hospitality',nome:'Prelazione rinnovo'},
-  {id:'H4',cat:'Hospitality',nome:'Nuovi spazi'},
+  {id:'N1',cat:'Naming',nome:'Denominazione ufficiale squadra',categorie:[CRM_TM]},
+  {id:'N2',cat:'Naming',nome:'Naming in comunicazioni ufficiali',categorie:[CRM_TM]},
+  {id:'D1',cat:'Digital',nome:'Banner sito web',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'D2',cat:'Digital',nome:'Link sito sponsor',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'D3',cat:'Digital',nome:'Post presentazione partnership',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'D4',cat:'Digital',nome:'Presenza continuativa social',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'D5',cat:'Digital',nome:'Newsletter',categorie:[CRM_TM,CRM_G,CRM_S]},
+  {id:'B1',cat:'Broadcast',nome:'Logo streaming intervalli',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'B2',cat:'Broadcast',nome:'Banner durante il gioco',categorie:[CRM_TM,CRM_G]},
+  {id:'B3',cat:'Broadcast',nome:'Logo highlights/video',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'B4',cat:'Broadcast',nome:'Naming squadra nei video',categorie:[CRM_TM]},
+  {id:'M1',cat:'Media',nome:'Logo locandine/materiali',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'M2',cat:'Media',nome:'Naming su locandine/brochure',categorie:[CRM_TM]},
+  {id:'M3',cat:'Media',nome:'Logo backdrop interviste',categorie:[CRM_TM,CRM_G,CRM_S]},
+  {id:'M4',cat:'Media',nome:'Citazioni comunicati stampa',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'T1',cat:'Team',nome:'Logo maglia fronte',categorie:[CRM_TM,CRM_G,CRM_S]},
+  {id:'T2',cat:'Team',nome:'Logo su capo tecnico',categorie:[CRM_TM]},
+  {id:'T3',cat:'Team',nome:'Speaker gare',categorie:[CRM_TM,CRM_G,CRM_S]},
+  {id:'T4',cat:'Team',nome:'Uso immagine squadra',categorie:[CRM_TM,CRM_G,CRM_S]},
+  {id:'T5',cat:'Team',nome:'Qualifica sponsor',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O]},
+  {id:'H1',cat:'Hospitality',nome:'Networking partner',categorie:[CRM_TM,CRM_G]},
+  {id:'H2',cat:'Hospitality',nome:'Accrediti Hospitality',categorie:[CRM_TM,CRM_G,CRM_S,CRM_O],valorePerCategoria:{[CRM_TM]:6,[CRM_G]:4,[CRM_S]:2,[CRM_O]:1}},
+  {id:'H3',cat:'Hospitality',nome:'Prelazione rinnovo',categorie:[CRM_TM,CRM_G,CRM_S]},
+  {id:'H4',cat:'Hospitality',nome:'Prelazione nuovi spazi',categorie:[CRM_TM,CRM_G,CRM_S]},
 ];
-const CRM_ATTIVITA_ICONE = {Digital:'💻',Broadcast:'📡',Media:'📰',Team:'🏀',Hospitality:'🎟️'};
+const CRM_ATTIVITA_ICONE = {Naming:'⭐',Digital:'💻',Broadcast:'📡',Media:'📰',Team:'🏀',Hospitality:'🎟️'};
+
+// Vero se la voce si applica alla categoria dello sponsor. Una categoria personalizzata
+// (fuori dalle 4 standard) non è nella matrice: per non bloccare tutto arbitrariamente,
+// in quel caso si considera applicabile.
+function crmAttivitaApplicabile(attivita, categoriaSponsor){
+  if(!CRM_CATEGORIE_STD.includes(categoriaSponsor)) return true;
+  return attivita.categorie.includes(categoriaSponsor);
+}
 
 function crmContaAttivazioniCompletate(s){
   const att = s.attivazioni||{};
-  const tot = CRM_ATTIVITA_CATALOGO.length;
-  const fatte = CRM_ATTIVITA_CATALOGO.filter(a=>att[a.id]?.stato==='completata').length;
+  const applicabili = CRM_ATTIVITA_CATALOGO.filter(a=>crmAttivitaApplicabile(a, s.categoria));
+  const tot = applicabili.length;
+  const fatte = applicabili.filter(a=>att[a.id]?.stato==='completata').length;
   return {fatte, tot};
 }
 
@@ -4104,28 +4121,31 @@ function renderAttivazioniSponsor(s){
   if(btnSalva) btnSalva.style.display = isAdmin?'':'none';
   const att = s.attivazioni||{};
   const {fatte, tot} = crmContaAttivazioniCompletate(s);
-  document.getElementById('spd-att-conteggio').textContent = `${fatte}/${tot} completate`;
+  document.getElementById('spd-att-conteggio').textContent = `${fatte}/${tot} incluse nel pacchetto ${s.categoria||'—'}`;
 
-  const categorie = ['Digital','Broadcast','Media','Team','Hospitality'];
+  const categorie = ['Naming','Digital','Broadcast','Media','Team','Hospitality'];
   const cont = document.getElementById('spd-attivazioni-container');
   cont.innerHTML = categorie.map(cat=>{
     const voci = CRM_ATTIVITA_CATALOGO.filter(a=>a.cat===cat);
     return `<div class="att-cat-header">${CRM_ATTIVITA_ICONE[cat]} ${cat}</div>` + voci.map(a=>{
       const v = att[a.id]||{};
-      const st = crmStatoAttivazione(v);
+      const applicabile = crmAttivitaApplicabile(a, s.categoria);
+      const st = applicabile ? crmStatoAttivazione(v) : {l:'✕ Non incluso', c:'#999', bg:'#EDEDED'};
+      const editabile = isAdmin && applicabile;
+      const hint = a.valorePerCategoria?.[s.categoria] ? ` <span style="color:var(--text3)">(previsti: ${a.valorePerCategoria[s.categoria]})</span>` : '';
       return `
-      <div class="att-riga">
+      <div class="att-riga" style="${applicabile?'':'opacity:.5'}">
         <span class="att-badge-mini">${a.id}</span>
-        <span style="font-size:11px">${a.nome}</span>
+        <span style="font-size:11px">${a.nome}${hint}</span>
         <span class="att-badge-mini" style="background:${st.bg};color:${st.c}">${st.l}</span>
       </div>
       <div class="att-riga-extra" style="display:grid">
         <input type="text" class="form-input" placeholder="Responsabile" value="${v.responsabile||''}"
-          ${isAdmin?'':'disabled'} onchange="_attEdit('${a.id}','responsabile',this.value)">
+          ${editabile?'':'disabled'} onchange="_attEdit('${a.id}','responsabile',this.value)">
         <input type="date" class="form-input" title="Data prevista" value="${v.dataPrevista||''}"
-          ${isAdmin?'':'disabled'} onchange="_attEdit('${a.id}','dataPrevista',this.value)">
+          ${editabile?'':'disabled'} onchange="_attEdit('${a.id}','dataPrevista',this.value)">
         <input type="date" class="form-input" title="Data completata" value="${v.dataCompletata||''}"
-          ${isAdmin?'':'disabled'} onchange="_attEdit('${a.id}','dataCompletata',this.value)">
+          ${editabile?'':'disabled'} onchange="_attEdit('${a.id}','dataCompletata',this.value)">
       </div>`;
     }).join('');
   }).join('');
