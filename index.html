@@ -2482,6 +2482,7 @@ function buildScadenzario(){
       <td style="white-space:nowrap">
         ${stato!=='pagato'?`<button class="btn btn-dark" style="font-size:10px;padding:2px 8px" onclick="apriSaldaRata('${s.id}')">✓ Salda</button>`:''}
         <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" title="Converti in piano rateale / modifica" onclick="convertiInPiano('${s.id}')">📅</button>
+        <button class="btn-del" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="eliminaScadenzaSingola('${s.id}')">🗑</button>
       </td>
     </tr>`;
   }
@@ -2525,6 +2526,7 @@ function buildScadenzario(){
           📅 ${isOpen?'▲':'▼'}
         </button>
         <button class="btn" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="event.stopPropagation();apriModalRateazionePerPianoId('${pianoId}')">✏</button>
+        <button class="btn-del" style="font-size:10px;padding:2px 6px;margin-left:3px" onclick="event.stopPropagation();eliminaPianoRateazione('${pianoId}')">🗑</button>
       </td>
     </tr>
     <tr id="scad-piano-open-${pianoId}" data-open="${isOpen?'1':'0'}" style="display:${isOpen?'':'none'}">
@@ -2653,6 +2655,27 @@ async function bulkCambiaImporto(){
   });
 
   deselezionaTutte();
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario();
+}
+
+async function eliminaPianoRateazione(pianoId){
+  const piano = pianiRateazione.find(p=>p.id===pianoId);
+  if(!piano){ alert('Piano non trovato.'); return; }
+  const nVoci = scadenzario.filter(s=>s.pianoId===pianoId).length;
+  const nomeConto = getNomeContoById(piano.contoId);
+  if(!confirm(`Eliminare definitivamente il piano rate su "${nomeConto}" — ${piano.soc}, ${nVoci} rate?\n\nATTENZIONE: questo rimuove solo il piano e le sue rate dallo scadenzario. Se il saldo di origine (bilancio apertura o registrazione) è duplicato, va corretto separatamente in Bilancio Apertura o Prima Nota — altrimenti il saldo del conto in Mastrini resta gonfiato anche dopo questa eliminazione.`)) return;
+  scadenzario = scadenzario.filter(s=>s.pianoId!==pianoId);
+  pianiRateazione = pianiRateazione.filter(p=>p.id!==pianoId);
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario();
+}
+
+async function eliminaScadenzaSingola(scadId){
+  const s = scadenzario.find(x=>x.id===scadId);
+  if(!s) return;
+  if(!confirm(`Eliminare questa voce dallo scadenzario ("${s.controparte}" — ${fmt(s.importo)})?\n\nNon tocca la registrazione o il saldo di apertura originale: rimuove solo la scadenza collegata.`)) return;
+  scadenzario = scadenzario.filter(x=>x.id!==scadId);
   if(window.salvaEAggiorna) await window.salvaEAggiorna();
   buildScadenzario();
 }
