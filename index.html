@@ -3075,18 +3075,18 @@ const ADMIN_UID  = 'rCC7FsynxFV6SXrUlrKAjGqIq782';
 const ADMIN_NOME = 'Nico de Robertis';
 
 // ── SALVATAGGIO ──
-let _salvataggioInCorso = false;
+let _salvataggiInCorso = 0; // contatore, non booleano: salvataggi sovrapposti non devono togliersi a vicenda la protezione
 
 window.salvaDatiFirestore = async function(){
+  _salvataggiInCorso++;
   try{
-    _salvataggioInCorso = true;
     await DATI_REF().set({
       pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione,
       aggiornatoIl: new Date().toISOString(),
       aggiornatoDa: window._currentUser?.nome||'sistema'
     });
   }catch(e){ console.error('Errore salvataggio:',e.message); }
-  finally{ setTimeout(()=>{ _salvataggioInCorso = false; }, 1000); }
+  finally{ setTimeout(()=>{ _salvataggiInCorso = Math.max(0,_salvataggiInCorso-1); }, 1000); }
 };
 
 window.salvaEAggiorna = async function(){
@@ -3134,8 +3134,8 @@ window.avviaListenerDati = function(){
   let primo = true;
   const unsub = DATI_REF().onSnapshot(snap=>{
     if(!snap.exists||primo){ primo=false; return; }
-    // Non sovrascrivere durante un salvataggio in corso
-    if(_salvataggioInCorso) return;
+    // Non sovrascrivere durante un salvataggio in corso (anche se sovrapposto ad un altro)
+    if(_salvataggiInCorso>0) return;
     const d = snap.data();
     if(d.pianoConti)       pianoConti       = d.pianoConti;
     if(d.registrazioni)    registrazioni    = d.registrazioni;
