@@ -434,6 +434,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
       <div class="crm-toggle no-print">
         <button class="btn active" id="crm-view-tabella" onclick="crmSwitchView('tabella')">📋 Tabella</button>
         <button class="btn" id="crm-view-kanban" onclick="crmSwitchView('kanban')">🗂 Kanban</button>
+        <button class="btn" id="crm-view-attivazioni" onclick="crmSwitchView('attivazioni')">📊 Attivazioni</button>
       </div>
 
       <div class="toolbar no-print">
@@ -3686,6 +3687,7 @@ function crmSwitchView(v){
   _crmView = v;
   document.getElementById('crm-view-tabella').classList.toggle('active', v==='tabella');
   document.getElementById('crm-view-kanban').classList.toggle('active', v==='kanban');
+  document.getElementById('crm-view-attivazioni').classList.toggle('active', v==='attivazioni');
   buildCRM();
 }
 
@@ -3759,6 +3761,16 @@ function crmContaAttivazioniCompletate(s){
   return {fatte, tot};
 }
 
+// Come sopra ma ristretto a un singolo gruppo (Naming/Digital/Broadcast/Media/Team/Hospitality),
+// usato dalla vista di riepilogo attivazioni per sponsor.
+function crmContaCategoriaAttivazioni(s, cat){
+  const att = s.attivazioni||{};
+  const applicabili = CRM_ATTIVITA_CATALOGO.filter(a=>a.cat===cat && crmAttivitaApplicabile(a, s.categoria));
+  const tot = applicabili.length;
+  const fatte = applicabili.filter(a=>att[a.id]?.stato==='completata').length;
+  return {fatte, tot};
+}
+
 function crmFiltra(){
   const stato  = document.getElementById('crm-filter-stato')?.value||'';
   const cat    = document.getElementById('crm-filter-cat')?.value||'';
@@ -3795,6 +3807,39 @@ function buildCRM(){
 
   const cont = document.getElementById('crm-container');
   if(!cont) return;
+
+  if(_crmView==='attivazioni'){
+    const gruppi = ['Naming','Digital','Broadcast','Media','Team','Hospitality'];
+    const righe = lista.map(s=>{
+      const perGruppo = gruppi.map(cat=>crmContaCategoriaAttivazioni(s,cat));
+      const {fatte,tot} = crmContaAttivazioniCompletate(s);
+      return { s, perGruppo, fatte, tot, pct: tot>0?fatte/tot:1 };
+    }).sort((a,b)=>a.pct-b.pct); // meno completi in cima, per dare priorità a chi va seguito
+
+    if(!righe.length){
+      cont.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuno sponsor trovato</div>';
+      return;
+    }
+
+    cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+      <thead><tr>
+        <th>Sponsor</th><th>Categoria</th>
+        ${gruppi.map(cat=>`<th style="text-align:center">${CRM_ATTIVITA_ICONE[cat]} ${cat}</th>`).join('')}
+        <th style="text-align:center;background:var(--bg3)">Totale</th>
+      </tr></thead>
+      <tbody>${righe.map(r=>{
+        const pctColor = r.pct===1?'#1A5C38':r.pct===0?'#943126':'#8A6D00';
+        const pctBg    = r.pct===1?'#C6EFCE':r.pct===0?'#FDEBD0':'#FFF2CC';
+        return `<tr style="cursor:pointer" onclick="apriDettaglioSponsor('${r.s.id}')">
+          <td style="font-weight:700">${r.s.logo?`<img src="${r.s.logo}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;border-radius:4px">`:''}${r.s.nome}</td>
+          <td>${r.s.categoria?`<span class="badge-cat ${crmCatSlug(r.s.categoria)}">${r.s.categoria}</span>`:'—'}</td>
+          ${r.perGruppo.map(c=>`<td style="text-align:center;${c.tot===0?'color:var(--text3)':''}">${c.tot===0?'—':c.fatte+'/'+c.tot}</td>`).join('')}
+          <td style="text-align:center;font-weight:700;background:${pctBg};color:${pctColor}">${r.fatte}/${r.tot}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+    return;
+  }
 
   if(_crmView==='kanban'){
     cont.innerHTML = `<div class="kanban-wrap">${CRM_STATI.map(st=>{
