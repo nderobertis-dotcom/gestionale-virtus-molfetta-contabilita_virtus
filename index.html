@@ -458,7 +458,8 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
         </select>
         <input type="text" id="crm-search" class="form-input" placeholder="🔍 Cerca sponsor/referente..." style="width:200px" oninput="buildCRM()">
-        <button class="btn btn-dark perm-admin" onclick="apriModalSponsor()">+ Nuovo Sponsor</button>
+        <button class="btn btn-dark" id="crm-nuovo-sponsor-btn" onclick="apriModalSponsor()">+ Nuovo Sponsor</button>
+        <button class="btn perm-admin" onclick="apriModalPermessiCRM()">⚙️ Permessi</button>
       </div>
 
       <div id="crm-container"></div>
@@ -3199,6 +3200,7 @@ auth.onAuthStateChanged(async function(user){
       await window.caricaDatiFirestore();
       if(!_listenerUnsubscribe) _listenerUnsubscribe = window.avviaListenerDati();
       if(!_crmListenerUnsubscribe) _crmListenerUnsubscribe = window.avviaListenerCRM();
+      caricaCrmPermessi();
       // Render iniziale
       renderPianoConti();
       aggiornaDatalist();
@@ -3537,6 +3539,23 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+<!-- ── MODAL PERMESSI CRM ── -->
+<div class="modal-overlay" id="modal-permessi-crm" onclick="if(event.target===this)chiudiModal('modal-permessi-crm')">
+  <div class="modal" style="width:480px">
+    <div class="modal-title">⚙️ Permessi di modifica CRM</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:.8rem">
+      Gli admin possono sempre inserire e modificare. Seleziona qui gli altri account (editor o visitor) che vuoi abilitare a farlo solo nel CRM, senza cambiare il loro ruolo generale nel resto del gestionale.
+    </div>
+    <div id="permessi-crm-lista" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.3rem .8rem">
+      <div style="padding:1rem;color:var(--text2);font-size:12px">Caricamento utenti...</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-permessi-crm')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaPermessiCRM()">Salva permessi</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL DETTAGLIO SPONSOR (storico interazioni) ── -->
 <div class="modal-overlay" id="modal-sponsor-detail" onclick="if(event.target===this)chiudiModal('modal-sponsor-detail')">
   <div class="modal" style="width:640px">
@@ -3555,7 +3574,7 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
       <div id="spd-attivazioni-container" style="max-height:280px;overflow-y:auto;overflow-x:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem"></div>
       <div style="text-align:right;margin-top:.5rem">
-        <button class="btn btn-dark perm-admin" style="font-size:11px" onclick="salvaAttivazioniSponsor()">💾 Salva attivazioni</button>
+        <button class="btn btn-dark" id="spd-salva-att-btn" style="font-size:11px" onclick="salvaAttivazioniSponsor()">💾 Salva attivazioni</button>
       </div>
     </div>
 
@@ -3575,8 +3594,8 @@ async function cambiaRuoloUtente(uid,ruolo){
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="chiudiModal('modal-sponsor-detail')">Chiudi</button>
-      <button class="btn btn-dark perm-admin" id="spd-modifica-btn">✏️ Modifica anagrafica</button>
-      <button class="btn-del perm-admin" id="spd-elimina-btn">✕ Elimina</button>
+      <button class="btn btn-dark" id="spd-modifica-btn">✏️ Modifica anagrafica</button>
+      <button class="btn-del" id="spd-elimina-btn">✕ Elimina</button>
     </div>
   </div>
 </div>
@@ -3600,6 +3619,60 @@ const CON_REF = () => db.collection('contratti_doc');
 // intero ad ogni salvataggio contabile e con listener realtime proprio — mescolarli
 // avrebbe causato re-render incrociati e rischio di sovrascritture concorrenti.
 const CRM_REF = () => db.collection('crm_sponsor');
+// Permessi di modifica CRM: lista di uid abilitati a inserire/modificare nel CRM
+// indipendentemente dal loro ruolo globale (admin/editor/visitor). Vive in un doc
+// separato, non nel doc contabilità né dentro ogni sponsor, perché è una policy
+// trasversale di accesso, non un dato di uno sponsor specifico.
+const CRM_PERMESSI_REF = () => db.collection('crm_config').doc('permessi');
+let crmPermessiEditor = [];
+let _crmPermessiCaricati = false;
+
+async function caricaCrmPermessi(){
+  try{
+    const snap = await CRM_PERMESSI_REF().get();
+    crmPermessiEditor = snap.exists ? (snap.data().editors||[]) : [];
+  }catch(e){ console.error('Errore caricamento permessi CRM:', e.message); }
+  _crmPermessiCaricati = true;
+}
+
+// Vero se l'utente corrente può inserire/modificare nel CRM: admin globale
+// SEMPRE abilitato, oppure uid esplicitamente autorizzato indipendentemente dal ruolo.
+function crmPuoModificare(){
+  if(window.currentRuolo==='admin') return true;
+  return crmPermessiEditor.includes(window._currentUser?.uid);
+}
+
+async function apriModalPermessiCRM(){
+  apriModal('modal-permessi-crm');
+  const cont = document.getElementById('permessi-crm-lista');
+  cont.innerHTML = '<div style="padding:1rem;color:var(--text2);font-size:12px">Caricamento utenti...</div>';
+  try{
+    const snap = await db.collection('utenti').get();
+    const utenti = snap.docs.map(d=>({uid:d.id,...d.data()}));
+    cont.innerHTML = utenti.map(u=>{
+      const isAdminUtente = u.ruolo==='admin';
+      const checked = isAdminUtente || crmPermessiEditor.includes(u.uid);
+      return `<label style="display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:.5px solid var(--border);font-size:12px;${isAdminUtente?'opacity:.6':''}">
+        <input type="checkbox" class="crm-perm-check" data-uid="${u.uid}" ${checked?'checked':''} ${isAdminUtente?'disabled':''}>
+        <span style="flex:1"><b>${u.nome||u.email||u.uid}</b> <span style="color:var(--text3)">(${u.ruolo||'—'})</span></span>
+        ${isAdminUtente?'<span style="font-size:9px;color:var(--text3)">sempre abilitato</span>':''}
+      </label>`;
+    }).join('') || '<div style="padding:1rem;color:var(--text2);font-size:12px">Nessun utente trovato.</div>';
+  }catch(e){
+    cont.innerHTML = '<div style="padding:1rem;color:var(--rosso);font-size:12px">Errore caricamento utenti: '+e.message+'</div>';
+  }
+}
+
+async function salvaPermessiCRM(){
+  const editors = [...document.querySelectorAll('.crm-perm-check:checked:not(:disabled)')].map(cb=>cb.dataset.uid);
+  try{
+    await CRM_PERMESSI_REF().set({editors, aggiornatoIl:new Date().toISOString(), aggiornatoDa:window._currentUser?.nome||'sistema'});
+    crmPermessiEditor = editors;
+    chiudiModal('modal-permessi-crm');
+    mostraSalvataggio();
+    buildCRM();
+  }catch(e){ alert('Errore salvataggio permessi: '+e.message); }
+}
 
 // ── CRM SPONSOR: listener realtime ──
 window.avviaListenerCRM = function(){
@@ -3684,7 +3757,9 @@ function crmFiltra(){
 }
 
 function buildCRM(){
-  const isAdmin = window.currentRuolo==='admin';
+  const isAdmin = crmPuoModificare();
+  const btnNuovo = document.getElementById('crm-nuovo-sponsor-btn');
+  if(btnNuovo) btnNuovo.style.display = isAdmin?'':'none';
   const lista = crmFiltra();
 
   // Metriche
@@ -3899,6 +3974,9 @@ function apriDettaglioSponsor(id){
 
   const btnMod = document.getElementById('spd-modifica-btn');
   const btnDel = document.getElementById('spd-elimina-btn');
+  const puoModificare = crmPuoModificare();
+  btnMod.style.display = puoModificare?'':'none';
+  btnDel.style.display = puoModificare?'':'none';
   btnMod.onclick = ()=>apriModalSponsor(id);
   btnDel.onclick = ()=>eliminaSponsor(id);
   apriModal('modal-sponsor-detail');
@@ -3907,7 +3985,7 @@ function apriDettaglioSponsor(id){
 // ── CONTRATTO SPONSOR (durata + PDF, sempre a chunk in subcollection dedicata) ──
 function renderContrattoSponsor(s){
   const cont = document.getElementById('spd-contratto-container');
-  const isAdmin = window.currentRuolo==='admin';
+  const isAdmin = crmPuoModificare();
   const c = s.contratto;
   if(c && c.nomeFile){
     cont.innerHTML = `
@@ -4021,7 +4099,9 @@ function crmStatoAttivazione(a){
 }
 
 function renderAttivazioniSponsor(s){
-  const isAdmin = window.currentRuolo==='admin';
+  const isAdmin = crmPuoModificare();
+  const btnSalva = document.getElementById('spd-salva-att-btn');
+  if(btnSalva) btnSalva.style.display = isAdmin?'':'none';
   const att = s.attivazioni||{};
   const {fatte, tot} = crmContaAttivazioniCompletate(s);
   document.getElementById('spd-att-conteggio').textContent = `${fatte}/${tot} completate`;
@@ -4112,6 +4192,7 @@ function apriModulo(modulo){
   } else if(modulo === 'crm-sponsor'){
     sidebar.style.display = 'none';
     showPage('crm', null); // dati già in memoria via listener realtime, nessun caricamento da fare
+    if(!_crmPermessiCaricati) caricaCrmPermessi().then(()=>buildCRM());
   }
 }
 
