@@ -3753,6 +3753,18 @@ function crmAttivitaApplicabile(attivita, categoriaSponsor){
   return attivita.categorie.includes(categoriaSponsor);
 }
 
+function crmLegendaAttivazioniHTML(){
+  return `<div style="font-size:10px;color:var(--text3);background:var(--bg3);border-radius:8px;padding:.5rem .8rem;margin-bottom:.7rem;line-height:1.6">
+    <b>Come leggere le date attivazioni</b> (si modificano aprendo il dettaglio sponsor):
+    <b>Data prevista</b> = scadenza pianificata, solo di riferimento — <b>Data completata</b> = quando l'hai fatta davvero, è questa che "chiude" la voce.
+    Stato calcolato in automatico: <span class="badge-stato attivo" style="font-size:9px">✅ Fatta</span> se c'è la completata ·
+    <span class="badge-stato scaduto" style="font-size:9px">⚠️ In ritardo</span> se la prevista è passata senza completata ·
+    <span class="badge-stato trattativa" style="font-size:9px">🔵 In corso</span> se c'è solo prevista o responsabile ·
+    <span class="badge-stato lead" style="font-size:9px">— Da fare</span> se non hai inserito nulla.
+    I numeri "X/Y" contano solo le attivazioni incluse nel pacchetto della categoria di ciascuno sponsor.
+  </div>`;
+}
+
 function crmContaAttivazioniCompletate(s){
   const att = s.attivazioni||{};
   const applicabili = CRM_ATTIVITA_CATALOGO.filter(a=>crmAttivitaApplicabile(a, s.categoria));
@@ -3821,7 +3833,7 @@ function buildCRM(){
       return;
     }
 
-    cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+    cont.innerHTML = crmLegendaAttivazioniHTML() + `<div class="tbl-wrap scrollx"><table>
       <thead><tr>
         <th>Sponsor</th><th>Categoria</th>
         ${gruppi.map(cat=>`<th style="text-align:center">${CRM_ATTIVITA_ICONE[cat]} ${cat}</th>`).join('')}
@@ -3842,7 +3854,7 @@ function buildCRM(){
   }
 
   if(_crmView==='kanban'){
-    cont.innerHTML = `<div class="kanban-wrap">${CRM_STATI.map(st=>{
+    cont.innerHTML = crmLegendaAttivazioniHTML() + `<div class="kanban-wrap">${CRM_STATI.map(st=>{
       const carte = lista.filter(s=>s.stato===st.v);
       return `<div class="kanban-col"><h4>${st.l} (${carte.length})</h4>${carte.map(s=>`
         <div class="kanban-card" onclick="apriDettaglioSponsor('${s.id}')">
