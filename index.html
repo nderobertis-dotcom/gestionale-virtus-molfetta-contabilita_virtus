@@ -3861,6 +3861,14 @@ function buildCRM(){
     return s.stato==='attivo' && g!==null && g<=60 && g>=0;
   }).length;
 
+  // Marginalità media pesata sul valore: chi vale di più pesa di più sulla media.
+  // Esclude gli sponsor senza MGR o senza valore (non compilato = non contribuisce, non vale 0).
+  const attiviConMgr = attivi.filter(s=>s.mgr!==undefined && s.mgr!==null && Number(s.valore)>0);
+  const valoreConMgr = attiviConMgr.reduce((a,s)=>a+Number(s.valore),0);
+  const mgrMedioPesato = valoreConMgr>0
+    ? attiviConMgr.reduce((a,s)=>a+Number(s.valore)*Number(s.mgr),0) / valoreConMgr
+    : null;
+
   // Valore filtrato: solo sugli sponsor attivi che passano gli attuali filtri (stato/categoria/società/ricerca).
   // Mostrato in aggiunta al totale generale, non al suo posto, così il totale resta sempre un riferimento stabile.
   const filtriAttivi = !!(
@@ -3876,7 +3884,8 @@ function buildCRM(){
     <div class="metric"><div class="metric-label">Valore Portafoglio (totale)</div><div class="metric-value" style="color:var(--ricavo)">${fmt(valoreTot)}</div></div>
     ${filtriAttivi?`<div class="metric"><div class="metric-label">Valore Portafoglio (filtro attivo)</div><div class="metric-value" style="color:var(--ricavo)">${fmt(valoreFiltrato)}</div></div>`:''}
     <div class="metric"><div class="metric-label">In Trattativa</div><div class="metric-value">${trattativa}</div></div>
-    <div class="metric"><div class="metric-label">In Scadenza (60gg)</div><div class="metric-value ${inScadenza?'avere':''}" style="${inScadenza?'color:var(--rosso)':''}">${inScadenza}</div></div>`;
+    <div class="metric"><div class="metric-label">In Scadenza (60gg)</div><div class="metric-value ${inScadenza?'avere':''}" style="${inScadenza?'color:var(--rosso)':''}">${inScadenza}</div></div>
+    <div class="metric"><div class="metric-label">Marginalità media (pesata sul valore)</div><div class="metric-value">${mgrMedioPesato!==null?mgrMedioPesato.toFixed(1)+'%':'—'}</div></div>`;
 
   const cont = document.getElementById('crm-container');
   if(!cont) return;
