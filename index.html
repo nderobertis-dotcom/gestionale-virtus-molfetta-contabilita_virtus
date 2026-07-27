@@ -3569,6 +3569,10 @@ async function cambiaRuoloUtente(uid,ruolo){
         <input type="date" class="form-input" id="sp-scadenza">
       </div>
     </div>
+    <div class="form-row"><label class="form-label">MGR</label>
+      <input type="number" class="form-input" id="sp-mgr" min="0" max="100" step="1" placeholder="0–100" style="max-width:120px">
+      <div style="font-size:10px;color:var(--text3);margin-top:.3rem">Valore puramente indicativo (0–100) — non entra in nessun calcolo del CRM</div>
+    </div>
     <div class="form-row"><label class="form-label">Logo sponsor</label>
       <div style="display:flex;align-items:center;gap:.7rem">
         <img id="sp-logo-preview" style="width:52px;height:52px;border-radius:8px;object-fit:contain;background:var(--bg3);border:.5px solid var(--border);display:none">
@@ -3949,7 +3953,7 @@ function buildCRM(){
   cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
     <thead><tr>
       <th>Sponsor</th><th>Referente</th><th>Categoria</th><th>Stato</th>
-      <th style="text-align:right">Valore/anno</th><th>Scadenza</th><th>Soc.</th><th>Attivazioni</th><th></th>
+      <th style="text-align:right">Valore/anno</th><th>Scadenza</th><th>Soc.</th><th>Attivazioni</th><th style="text-align:center">MGR</th><th></th>
     </tr></thead>
     <tbody>${lista.map(s=>{
       const g = crmGiorniScadenza(s.scadenza);
@@ -3964,6 +3968,7 @@ function buildCRM(){
         <td class="${scadWarn?'crm-scadenza-warn':''}">${s.scadenza?fmtData(s.scadenza)+(scadWarn?' ⚠️':''):'—'}</td>
         <td>${s.soc?`<span class="badge-soc badge-${s.soc[0].toLowerCase()}">${s.soc}</span>`:'—'}</td>
         <td><span class="att-badge-mini" style="${fatte===tot&&tot>0?'background:#C6EFCE;color:#1A5C38':''}">${fatte}/${tot}</span></td>
+        <td style="text-align:center">${(s.mgr!==undefined && s.mgr!==null)?s.mgr:'—'}</td>
         <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriDettaglioSponsor('${s.id}')">Apri</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
@@ -3982,6 +3987,7 @@ function apriModalSponsor(id){
   document.getElementById('sp-stato').value     = s?.stato||'lead';
   document.getElementById('sp-valore').value    = s?.valore||'';
   document.getElementById('sp-scadenza').value  = s?.scadenza||'';
+  document.getElementById('sp-mgr').value       = (s?.mgr!==undefined && s?.mgr!==null) ? s.mgr : '';
   document.getElementById('sp-note').value      = s?.note||'';
 
   // Categoria: se non è una delle standard, seleziona "altra" e valorizza il campo libero
@@ -4062,6 +4068,13 @@ async function salvaSponsor(){
   const piva = document.getElementById('sp-piva').value.trim();
   if(piva && !/^\d{11}$/.test(piva) && !confirm('La Partita IVA non sembra composta da 11 cifre. Salvare comunque?')) return;
 
+  const mgrRaw = document.getElementById('sp-mgr').value;
+  let mgr = null;
+  if(mgrRaw!==''){
+    mgr = Math.round(Number(mgrRaw));
+    if(isNaN(mgr) || mgr<0 || mgr>100){ alert('MGR deve essere un numero tra 0 e 100.'); return; }
+  }
+
   const dati = {
     nome,
     soc:        document.getElementById('spn-soc').value,
@@ -4073,6 +4086,7 @@ async function salvaSponsor(){
     stato:      document.getElementById('sp-stato').value,
     valore:     Number(document.getElementById('sp-valore').value)||0,
     scadenza:   document.getElementById('sp-scadenza').value||null,
+    mgr,
     note:       document.getElementById('sp-note').value.trim(),
     aggiornatoIl: new Date().toISOString(),
     aggiornatoDa: window._currentUser?.nome||'sistema',
