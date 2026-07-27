@@ -3612,6 +3612,7 @@ let contrattiDoc  = [];
 let _tabContratti = 'staff';
 let crmSponsor    = [];
 let _crmView      = 'tabella';
+let _crmAttDettaglio = false; // vista attivazioni: false=raggruppata per categoria, true=dettaglio 24 voci
 
 const FA_REF  = () => db.collection('fatture_attive');
 const CON_REF = () => db.collection('contratti_doc');
@@ -3833,7 +3834,35 @@ function buildCRM(){
       return;
     }
 
-    cont.innerHTML = crmLegendaAttivazioniHTML() + `<div class="tbl-wrap scrollx"><table>
+    const subToggle = `<div style="display:flex;gap:.4rem;margin-bottom:.6rem">
+      <button class="btn ${_crmAttDettaglio?'':'active'}" style="font-size:10px;padding:3px 10px" onclick="_crmAttDettaglio=false;buildCRM()">Raggruppato</button>
+      <button class="btn ${_crmAttDettaglio?'active':''}" style="font-size:10px;padding:3px 10px" onclick="_crmAttDettaglio=true;buildCRM()">Dettagliato (24 voci)</button>
+    </div>`;
+
+    if(_crmAttDettaglio){
+      cont.innerHTML = crmLegendaAttivazioniHTML() + subToggle + `<div class="tbl-wrap scrollx"><table style="font-size:10px">
+        <thead><tr>
+          <th style="min-width:130px">Sponsor</th>
+          ${CRM_ATTIVITA_CATALOGO.map(a=>`<th style="text-align:center;width:34px;padding:4px 2px;writing-mode:vertical-rl;transform:rotate(180deg);height:90px" title="${a.nome} (${a.cat})">${a.id}</th>`).join('')}
+          <th style="text-align:center;background:var(--bg3);min-width:54px">Tot.</th>
+        </tr></thead>
+        <tbody>${righe.map(r=>`<tr style="cursor:pointer" onclick="apriDettaglioSponsor('${r.s.id}')">
+          <td style="font-weight:700;padding:4px 8px">${r.s.nome}</td>
+          ${CRM_ATTIVITA_CATALOGO.map(a=>{
+            const applicabile = crmAttivitaApplicabile(a, r.s.categoria);
+            if(!applicabile) return `<td style="text-align:center;color:var(--text3);padding:4px 2px">·</td>`;
+            const v = (r.s.attivazioni||{})[a.id];
+            const st = crmStatoAttivazione(v);
+            const dot = st.l.startsWith('✅')?'✅':st.l.startsWith('⚠️')?'⚠️':st.l.startsWith('🔵')?'🔵':'—';
+            return `<td style="text-align:center;padding:4px 2px" title="${a.nome}: ${st.l}">${dot}</td>`;
+          }).join('')}
+          <td style="text-align:center;font-weight:700;background:var(--bg3)">${r.fatte}/${r.tot}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+      return;
+    }
+
+    cont.innerHTML = crmLegendaAttivazioniHTML() + subToggle + `<div class="tbl-wrap scrollx"><table>
       <thead><tr>
         <th>Sponsor</th><th>Categoria</th>
         ${gruppi.map(cat=>`<th style="text-align:center">${CRM_ATTIVITA_ICONE[cat]} ${cat}</th>`).join('')}
