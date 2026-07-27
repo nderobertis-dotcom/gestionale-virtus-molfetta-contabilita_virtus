@@ -398,7 +398,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
           <div>
             <div class="page-title">📄 Contratti</div>
-            <div class="page-sub">Staff · Roster · Procuratori — Caricamento riservato agli Admin</div>
+            <div class="page-sub">Staff · Roster · Procuratori — anagrafica con contratto, documento d'identità e certificato medico. Caricamento riservato agli Admin</div>
           </div>
         </div>
       </div>
@@ -408,12 +408,12 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <button id="tab-procuratori" class="btn" onclick="switchContratti('procuratori')">🧑‍💼 Procuratori</button>
       </div>
       <div class="toolbar no-print">
-        <select id="co-filter-soc" class="form-input" style="width:auto" onchange="buildContrattiDoc()">
+        <select id="co-filter-soc" class="form-input" style="width:auto" onchange="buildContrattiPersone()">
           <option value="">Tutte le società</option>
           <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
         </select>
-        <input type="text" id="co-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildContrattiDoc()">
-        <button class="btn btn-dark perm-admin no-print" onclick="apriModalUploadContratto()">+ Carica Contratto PDF</button>
+        <input type="text" id="co-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildContrattiPersone()">
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalPersona()">+ Nuova Anagrafica</button>
       </div>
       <div id="co-container"></div>
     </div>
@@ -3506,6 +3506,86 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+<!-- ── MODAL ANAGRAFICA PERSONA (Staff/Roster/Procuratori) ── -->
+<div class="modal-overlay" id="modal-persona" onclick="if(event.target===this)chiudiModal('modal-persona')">
+  <div class="modal" style="width:560px">
+    <div class="modal-title" id="pa-modal-title">👤 Nuova Anagrafica</div>
+    <input type="hidden" id="pa-id">
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Nome e cognome *</label>
+        <input type="text" class="form-input" id="pa-nome" placeholder="es. Mario Rossi">
+      </div>
+      <div class="form-row"><label class="form-label">Società</label>
+        <select class="form-input" id="pa-soc">
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Tipo</label>
+        <select class="form-input" id="pa-tipo">
+          <option value="staff">Staff</option>
+          <option value="roster">Roster</option>
+          <option value="procuratori">Procuratori</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Ruolo</label>
+        <input type="text" class="form-input" id="pa-ruolo" placeholder="es. Allenatore, Playmaker...">
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Data di nascita</label>
+        <input type="date" class="form-input" id="pa-nascita">
+      </div>
+      <div class="form-row"><label class="form-label">Codice fiscale</label>
+        <input type="text" class="form-input" id="pa-cf" style="text-transform:uppercase" maxlength="16">
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Telefono</label>
+        <input type="text" class="form-input" id="pa-telefono">
+      </div>
+      <div class="form-row"><label class="form-label">Email</label>
+        <input type="email" class="form-input" id="pa-email">
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Note</label>
+      <textarea class="form-input" id="pa-note" rows="2" placeholder="Note generali..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-persona')">Annulla</button>
+      <button class="btn btn-dark" onclick="salvaPersona()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL DETTAGLIO PERSONA (contratto, documento identità, certificato medico) ── -->
+<div class="modal-overlay" id="modal-persona-detail" onclick="if(event.target===this)chiudiModal('modal-persona-detail')">
+  <div class="modal" style="width:600px">
+    <div class="modal-title" id="pad-title">👤 Anagrafica</div>
+    <div id="pad-info" style="font-size:12px;color:var(--text2);margin-bottom:.8rem;line-height:1.6"></div>
+
+    <div class="crm-interazioni" style="border-top:1px solid var(--border);padding-top:.8rem;margin-top:0">
+      <label class="form-label">📄 Contratto</label>
+      <div id="pad-doc-contratto"></div>
+    </div>
+    <div class="crm-interazioni">
+      <label class="form-label">🪪 Documento d'identità</label>
+      <div id="pad-doc-identita"></div>
+    </div>
+    <div class="crm-interazioni">
+      <label class="form-label">⚕️ Certificato medico</label>
+      <div id="pad-doc-certmed"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-persona-detail')">Chiudi</button>
+      <button class="btn btn-dark perm-admin" id="pad-modifica-btn">✏️ Modifica anagrafica</button>
+      <button class="btn-del perm-admin" id="pad-elimina-btn">✕ Elimina</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL SPONSOR (anagrafica) ── -->
 <div class="modal-overlay" id="modal-sponsor" onclick="if(event.target===this)chiudiModal('modal-sponsor')">
   <div class="modal" style="width:560px">
@@ -3665,6 +3745,13 @@ let _crmAttDettaglio = false; // vista attivazioni: false=raggruppata per catego
 
 const FA_REF  = () => db.collection('fatture_attive');
 const CON_REF = () => db.collection('contratti_doc');
+// Anagrafiche Staff/Roster/Procuratori: un documento per persona, con contratto,
+// documento d'identità e certificato medico agganciati come sotto-collection a
+// chunk ciascuno (mai inline sul documento principale, stesso motivo del CRM sponsor:
+// tre file PDF potenziali per persona supererebbero facilmente il limite Firestore
+// se stessero nello stesso documento dell'anagrafica).
+const PERSONE_REF = () => db.collection('contratti_persone');
+let contrattiPersone = [];
 // CRM in collection dedicata (un documento per sponsor): scelta deliberata per NON
 // infilarlo dentro DATI_REF('contabilita/dati'), che e' un doc unico riscritto per
 // intero ad ogni salvataggio contabile e con listener realtime proprio — mescolarli
@@ -4373,6 +4460,7 @@ function apriModulo(modulo){
   } else if(modulo === 'contratti-doc'){
     sidebar.style.display = 'none';
     caricaContrattiDoc();
+    caricaContrattiPersone();
     showPage('contratti-doc', null);
   } else if(modulo === 'crm-sponsor'){
     sidebar.style.display = 'none';
@@ -4497,7 +4585,242 @@ function switchContratti(tab){
     const btn = document.getElementById('tab-'+t);
     if(btn){ btn.className = t===tab ? 'btn btn-dark' : 'btn'; }
   });
-  buildContrattiDoc();
+  buildContrattiPersone();
+}
+
+// ── ANAGRAFICHE PERSONE (Staff/Roster/Procuratori) ──
+async function caricaContrattiPersone(){
+  try{
+    const snap = await PERSONE_REF().get();
+    contrattiPersone = snap.docs.map(d=>({id:d.id,...d.data()}));
+    buildContrattiPersone();
+  }catch(e){ console.error('Anagrafiche persone:',e.message); }
+}
+
+function buildContrattiPersone(){
+  const filtSoc = document.getElementById('co-filter-soc')?.value||'';
+  const search  = document.getElementById('co-search')?.value?.toLowerCase()||'';
+  const isAdmin = window.currentRuolo==='admin';
+
+  let lista = contrattiPersone.filter(p=>{
+    if(p.tipo !== _tabContratti) return false;
+    if(filtSoc && p.soc!==filtSoc) return false;
+    if(search  && !p.nome?.toLowerCase().includes(search) && !p.ruolo?.toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+
+  const cont = document.getElementById('co-container');
+  if(!cont) return;
+
+  const titoliTab = {staff:'Staff',roster:'Roster',procuratori:'Procuratori'};
+
+  if(!lista.length){
+    cont.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuna anagrafica in "${titoliTab[_tabContratti]}"</div>`;
+    return;
+  }
+
+  const badgeDoc = (presente, scaduto)=>{
+    if(scaduto) return '<span class="att-badge-mini" style="background:#FDEBD0;color:#943126">⚠️ scaduto</span>';
+    return presente
+      ? '<span class="att-badge-mini" style="background:#C6EFCE;color:#1A5C38">✓</span>'
+      : '<span class="att-badge-mini">—</span>';
+  };
+
+  cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+    <thead><tr>
+      <th>Soc.</th><th>Nome</th><th>Ruolo</th>
+      <th style="text-align:center">📄 Contratto</th>
+      <th style="text-align:center">🪪 Identità</th>
+      <th style="text-align:center">⚕️ Cert. medico</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${lista.map(p=>{
+      const certScaduto = p.certificatoMedico?.scadenza && p.certificatoMedico.scadenza < new Date().toISOString().slice(0,10);
+      return `<tr style="cursor:pointer" onclick="apriDettaglioPersona('${p.id}')">
+        <td><span class="badge-soc badge-${p.soc?.[0]?.toLowerCase()}">${p.soc}</span></td>
+        <td style="font-weight:600">${p.nome||'—'}</td>
+        <td style="font-size:11px;color:var(--text2)">${p.ruolo||'—'}</td>
+        <td style="text-align:center">${badgeDoc(!!p.contratto?.nomeFile,false)}</td>
+        <td style="text-align:center">${badgeDoc(!!p.documentoIdentita?.nomeFile,false)}</td>
+        <td style="text-align:center">${badgeDoc(!!p.certificatoMedico?.nomeFile,certScaduto)}</td>
+        <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="event.stopPropagation();apriDettaglioPersona('${p.id}')">Apri</button></td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+function apriModalPersona(id){
+  document.getElementById('pa-modal-title').textContent = id ? '✏️ Modifica Anagrafica' : '👤 Nuova Anagrafica';
+  document.getElementById('pa-id').value = id||'';
+  const p = id ? contrattiPersone.find(x=>x.id===id) : null;
+  document.getElementById('pa-nome').value     = p?.nome||'';
+  document.getElementById('pa-soc').value      = p?.soc||'VIRTUS';
+  document.getElementById('pa-tipo').value     = p?.tipo||_tabContratti;
+  document.getElementById('pa-ruolo').value    = p?.ruolo||'';
+  document.getElementById('pa-nascita').value  = p?.nascita||'';
+  document.getElementById('pa-cf').value       = p?.cf||'';
+  document.getElementById('pa-telefono').value = p?.telefono||'';
+  document.getElementById('pa-email').value    = p?.email||'';
+  document.getElementById('pa-note').value     = p?.note||'';
+  chiudiModal('modal-persona-detail');
+  apriModal('modal-persona');
+}
+
+async function salvaPersona(){
+  const nome = document.getElementById('pa-nome').value.trim();
+  if(!nome){ alert('Inserisci nome e cognome.'); return; }
+  const id = document.getElementById('pa-id').value;
+  const dati = {
+    nome,
+    soc:      document.getElementById('pa-soc').value,
+    tipo:     document.getElementById('pa-tipo').value,
+    ruolo:    document.getElementById('pa-ruolo').value.trim(),
+    nascita:  document.getElementById('pa-nascita').value||null,
+    cf:       document.getElementById('pa-cf').value.trim().toUpperCase(),
+    telefono: document.getElementById('pa-telefono').value.trim(),
+    email:    document.getElementById('pa-email').value.trim(),
+    note:     document.getElementById('pa-note').value.trim(),
+    aggiornatoIl: new Date().toISOString(),
+    aggiornatoDa: window._currentUser?.nome||'sistema',
+  };
+  try{
+    if(id){
+      await PERSONE_REF().doc(id).set(dati,{merge:true});
+    } else {
+      dati.creatoIl = new Date().toISOString();
+      await PERSONE_REF().add(dati);
+    }
+    chiudiModal('modal-persona');
+    await caricaContrattiPersone();
+    mostraSalvataggio();
+  }catch(e){ alert('Errore salvataggio anagrafica: '+e.message); }
+}
+
+function apriDettaglioPersona(id){
+  const p = contrattiPersone.find(x=>x.id===id);
+  if(!p) return;
+  window._personaDettaglioId = id;
+  document.getElementById('pad-title').textContent = '👤 '+p.nome;
+  document.getElementById('pad-info').innerHTML = `
+    <b>Ruolo:</b> ${p.ruolo||'—'} &nbsp; <b>Società:</b> <span class="badge-soc badge-${p.soc?.[0]?.toLowerCase()}">${p.soc}</span><br>
+    ${p.nascita?'<b>Nato il:</b> '+fmtData(p.nascita)+'<br>':''}
+    ${p.cf?'<b>C.F.:</b> '+p.cf+'<br>':''}
+    ${p.telefono?'📞 '+p.telefono+' ':''}${p.email?'· ✉️ '+p.email:''}<br>
+    ${p.note?'<b>Note:</b> '+p.note:''}`;
+
+  renderDocumentoPersona(p,'contratto','pad-doc-contratto','contratto_chunks');
+  renderDocumentoPersona(p,'documentoIdentita','pad-doc-identita','identita_chunks');
+  renderDocumentoPersona(p,'certificatoMedico','pad-doc-certmed','certmed_chunks');
+
+  const btnMod = document.getElementById('pad-modifica-btn');
+  const btnDel = document.getElementById('pad-elimina-btn');
+  btnMod.onclick = ()=>apriModalPersona(id);
+  btnDel.onclick = ()=>eliminaPersona(id);
+  apriModal('modal-persona-detail');
+}
+
+// Rendering generico per uno dei 3 tipi di documento — evita di triplicare la stessa logica
+const PERSONA_DOC_LABELS = {contratto:'contratto', documentoIdentita:'documento', certificatoMedico:'certificato'};
+function renderDocumentoPersona(p, campo, containerId, subcollectionName){
+  const cont = document.getElementById(containerId);
+  const isAdmin = window.currentRuolo==='admin';
+  const doc = p[campo];
+  const conScadenza = campo==='certificatoMedico'; // solo il certificato medico ha senso di scadenza
+  if(doc && doc.nomeFile){
+    const scaduto = conScadenza && doc.scadenza && doc.scadenza < new Date().toISOString().slice(0,10);
+    cont.innerHTML = `
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem">
+        ${conScadenza?`<b>Scadenza:</b> <span style="${scaduto?'color:var(--rosso);font-weight:700':''}">${doc.scadenza?fmtData(doc.scadenza)+(scaduto?' ⚠️ scaduto':''):'—'}</span><br>`:''}
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="btn" style="font-size:11px" onclick="apriDocumentoPersona('${p.id}','${campo}','${subcollectionName}')">📄 Apri (${doc.nomeFile})</button>
+        ${isAdmin?`<button class="btn-del" onclick="eliminaDocumentoPersona('${p.id}','${campo}','${subcollectionName}')">✕ Elimina</button>`:''}
+      </div>`;
+  } else {
+    cont.innerHTML = isAdmin ? `
+      ${conScadenza?`<div class="form-row" style="margin-bottom:.5rem"><label class="form-label">Scadenza certificato</label><input type="date" class="form-input" id="pad-scad-${campo}"></div>`:''}
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <input type="file" class="form-input" id="pad-file-${campo}" accept=".pdf,image/*" style="flex:1">
+        <button class="btn btn-dark" style="font-size:11px" onclick="salvaDocumentoPersona('${p.id}','${campo}','${subcollectionName}')">Carica</button>
+      </div>
+      <div id="pad-progress-${campo}" style="display:none;margin-top:.4rem;font-size:10px;color:var(--text2)">Caricamento...</div>`
+      : `<div style="font-size:11px;color:var(--text3)">Nessun ${PERSONA_DOC_LABELS[campo]} caricato</div>`;
+  }
+}
+
+async function salvaDocumentoPersona(personaId, campo, subcollectionName){
+  const file = document.getElementById('pad-file-'+campo).files[0];
+  if(!file){ alert('Seleziona un file.'); return; }
+  const scadenzaEl = document.getElementById('pad-scad-'+campo);
+  const scadenza = scadenzaEl ? scadenzaEl.value||null : null;
+  const prog = document.getElementById('pad-progress-'+campo);
+  prog.style.display='block'; prog.textContent='Lettura file...';
+  try{
+    const b64 = await fileToBase64(file);
+    prog.textContent='Salvataggio su cloud...';
+    const nChunk = Math.ceil(b64.length/CHUNK_SIZE);
+    const ref = PERSONE_REF().doc(personaId);
+    for(let i=0;i<nChunk;i++){
+      await ref.collection(subcollectionName).doc('chunk_'+i).set({data:b64.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), idx:i});
+    }
+    await ref.update({
+      [campo]: { nomeFile:file.name, nChunk, scadenza, caricatoIl:new Date().toISOString(), caricatoDa:window._currentUser?.nome||'sistema' }
+    });
+    prog.textContent='Caricato!';
+    await caricaContrattiPersone();
+    setTimeout(()=>apriDettaglioPersona(personaId), 300);
+  }catch(e){ alert('Errore: '+e.message); prog.style.display='none'; }
+}
+
+async function apriDocumentoPersona(personaId, campo, subcollectionName){
+  try{
+    const p = contrattiPersone.find(x=>x.id===personaId);
+    const doc = p?.[campo];
+    if(!doc){ alert('Documento non trovato.'); return; }
+    const ref = PERSONE_REF().doc(personaId);
+    const chunks = [];
+    for(let i=0;i<doc.nChunk;i++){
+      const cs = await ref.collection(subcollectionName).doc('chunk_'+i).get();
+      if(cs.exists) chunks.push(cs.data().data);
+    }
+    const b64 = chunks.join('');
+    const byteStr = atob(b64.split(',')[1]||b64);
+    const ab = new ArrayBuffer(byteStr.length);
+    const ia = new Uint8Array(ab);
+    for(let i=0;i<byteStr.length;i++) ia[i]=byteStr.charCodeAt(i);
+    const mimeType = doc.nomeFile?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/*';
+    const blob = new Blob([ab],{type:mimeType});
+    const url = URL.createObjectURL(blob);
+    window.open(url,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }catch(e){ alert('Errore apertura documento: '+e.message); }
+}
+
+async function eliminaDocumentoPersona(personaId, campo, subcollectionName){
+  if(!confirm('Eliminare questo documento?')) return;
+  try{
+    const p = contrattiPersone.find(x=>x.id===personaId);
+    const nChunk = p?.[campo]?.nChunk||0;
+    const ref = PERSONE_REF().doc(personaId);
+    for(let i=0;i<nChunk;i++){ await ref.collection(subcollectionName).doc('chunk_'+i).delete(); }
+    await ref.update({ [campo]: firebase.firestore.FieldValue.delete() });
+    await caricaContrattiPersone();
+    setTimeout(()=>apriDettaglioPersona(personaId), 300);
+  }catch(e){ alert('Errore: '+e.message); }
+}
+
+async function eliminaPersona(id){
+  const p = contrattiPersone.find(x=>x.id===id);
+  if(!confirm(`Eliminare definitivamente l'anagrafica di "${p?.nome}"? Rimuove anche tutti i documenti collegati (contratto, identità, certificato). L'operazione non è reversibile.`)) return;
+  try{
+    // Ripulisce le sotto-collection dei documenti prima di eliminare il documento principale
+    for(const [campo, sub] of [['contratto','contratto_chunks'],['documentoIdentita','identita_chunks'],['certificatoMedico','certmed_chunks']]){
+      const nChunk = p?.[campo]?.nChunk||0;
+      for(let i=0;i<nChunk;i++){ await PERSONE_REF().doc(id).collection(sub).doc('chunk_'+i).delete(); }
+    }
+    await PERSONE_REF().doc(id).delete();
+    chiudiModal('modal-persona-detail');
+    await caricaContrattiPersone();
+  }catch(e){ alert('Errore: '+e.message); }
 }
 
 function buildContrattiDoc(){
