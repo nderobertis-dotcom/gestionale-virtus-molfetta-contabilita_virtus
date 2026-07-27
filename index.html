@@ -2238,26 +2238,37 @@ async function confermaSaldaConPN(){
 // ══════════════════════════════════════════════════════════════
 // Popola il datalist di ricerca conto SOLO da 3 caratteri in poi, per non
 // sommergere l'utente con centinaia di opzioni su una ricerca troppo generica.
+// Include anche i gruppi (non solo conto/sottoconto): cercare un gruppo come
+// "ROSTER 2026/2027" deve poter proporre il gruppo stesso, non solo le foglie.
 function scadAggiornaDatalistConti(query, datalistId){
   const dl = document.getElementById(datalistId);
   if(!dl) return;
   if(!query || query.trim().length<3){ dl.innerHTML=''; return; }
   const q = query.trim().toLowerCase();
   dl.innerHTML = pianoConti
-    .filter(c=>(c.tipo==='conto'||c.tipo==='sottoconto') && (c.codice?.toLowerCase().includes(q) || c.nome?.toLowerCase().includes(q)))
+    .filter(c=>c.tipo!=='classe' && (c.codice?.toLowerCase().includes(q) || c.nome?.toLowerCase().includes(q)))
     .slice(0,40)
     .map(c=>`<option value="${c.codice} — ${c.nome}">`)
     .join('');
 }
 
-// Vero se il conto corrisponde al testo digitato (per codice o nome, substring case-insensitive).
-// Filtra già a partire dal primo carattere digitato, indipendentemente dalla soglia delle proposte del datalist.
+// Vero se il conto (foglia) corrisponde al testo digitato — sul conto stesso
+// OPPURE su uno qualsiasi dei suoi antenati (gruppi). Così cercare "roster" trova
+// tutti i conti sotto il gruppo "ROSTER 2026/2027", e selezionare l'etichetta
+// completa di un conto preciso (es. "2.2.025 — IAIA SALVATORE") continua a
+// funzionare, perché l'etichetta intera è sempre una sotto-stringa di se stessa.
 function scadContoCorrisponde(contoId, testo){
   if(!testo || !testo.trim()) return true;
-  const c = pianoConti.find(x=>x.id===contoId);
-  if(!c) return false;
   const q = testo.trim().toLowerCase();
-  return (c.codice?.toLowerCase().includes(q)) || (c.nome?.toLowerCase().includes(q));
+  let nodo = pianoConti.find(x=>x.id===contoId);
+  let salti = 0;
+  while(nodo && salti<10){
+    const etichetta = `${nodo.codice} — ${nodo.nome}`.toLowerCase();
+    if(etichetta.includes(q)) return true;
+    nodo = nodo.padre ? pianoConti.find(x=>x.id===nodo.padre) : null;
+    salti++;
+  }
+  return false;
 }
 
 function aggiorniFiltroControparte(){
