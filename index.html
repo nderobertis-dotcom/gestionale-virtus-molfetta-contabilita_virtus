@@ -440,7 +440,6 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
       <div class="toolbar no-print">
         <select id="crm-filter-stato" class="form-input" style="width:auto" onchange="buildCRM()">
           <option value="">Tutti gli stati</option>
-          <option value="lead">Lead</option>
           <option value="contattato">Contattato</option>
           <option value="trattativa">In trattativa</option>
           <option value="attivo">Attivo</option>
@@ -3552,7 +3551,6 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
       <div class="form-row"><label class="form-label">Stato trattativa</label>
         <select class="form-input" id="sp-stato">
-          <option value="lead">Lead</option>
           <option value="contattato">Contattato</option>
           <option value="trattativa">In trattativa</option>
           <option value="attivo">Attivo</option>
@@ -3749,7 +3747,6 @@ function crmGiorniScadenza(dataStr){
 }
 
 const CRM_STATI = [
-  {v:'lead',        l:'Lead'},
   {v:'contattato',  l:'Contattato'},
   {v:'trattativa',  l:'In trattativa'},
   {v:'attivo',      l:'Attivo'},
@@ -3863,9 +3860,21 @@ function buildCRM(){
     const g = crmGiorniScadenza(s.scadenza);
     return s.stato==='attivo' && g!==null && g<=60 && g>=0;
   }).length;
+
+  // Valore filtrato: solo sugli sponsor attivi che passano gli attuali filtri (stato/categoria/società/ricerca).
+  // Mostrato in aggiunta al totale generale, non al suo posto, così il totale resta sempre un riferimento stabile.
+  const filtriAttivi = !!(
+    document.getElementById('crm-filter-stato')?.value ||
+    document.getElementById('crm-filter-cat')?.value ||
+    document.getElementById('crm-filter-soc')?.value ||
+    document.getElementById('crm-search')?.value
+  );
+  const valoreFiltrato = lista.filter(s=>s.stato==='attivo').reduce((a,s)=>a+(Number(s.valore)||0),0);
+
   document.getElementById('crm-metrics').innerHTML = `
     <div class="metric"><div class="metric-label">Sponsor Attivi</div><div class="metric-value">${attivi.length}</div></div>
-    <div class="metric"><div class="metric-label">Valore Portafoglio</div><div class="metric-value" style="color:var(--ricavo)">${fmt(valoreTot)}</div></div>
+    <div class="metric"><div class="metric-label">Valore Portafoglio (totale)</div><div class="metric-value" style="color:var(--ricavo)">${fmt(valoreTot)}</div></div>
+    ${filtriAttivi?`<div class="metric"><div class="metric-label">Valore Portafoglio (filtro attivo)</div><div class="metric-value" style="color:var(--ricavo)">${fmt(valoreFiltrato)}</div></div>`:''}
     <div class="metric"><div class="metric-label">In Trattativa</div><div class="metric-value">${trattativa}</div></div>
     <div class="metric"><div class="metric-label">In Scadenza (60gg)</div><div class="metric-value ${inScadenza?'avere':''}" style="${inScadenza?'color:var(--rosso)':''}">${inScadenza}</div></div>`;
 
@@ -3984,7 +3993,7 @@ function apriModalSponsor(id){
   document.getElementById('sp-referente').value = s?.referente||'';
   document.getElementById('sp-telefono').value  = s?.telefono||'';
   document.getElementById('sp-email').value     = s?.email||'';
-  document.getElementById('sp-stato').value     = s?.stato||'lead';
+  document.getElementById('sp-stato').value     = s?.stato||'contattato';
   document.getElementById('sp-valore').value    = s?.valore||'';
   document.getElementById('sp-scadenza').value  = s?.scadenza||'';
   document.getElementById('sp-mgr').value       = (s?.mgr!==undefined && s?.mgr!==null) ? s.mgr : '';
