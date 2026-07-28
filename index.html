@@ -4635,16 +4635,10 @@ function buildContrattiPersone(){
       <th style="text-align:center">📄 Contratto</th>
       <th style="text-align:center">🪪 Identità</th>
       <th style="text-align:center">⚕️ Cert. medico</th>
-      <th style="text-align:center;border-left:2px solid var(--border)" title="Flag di completezza scheda anagrafica">✓ Cognome</th>
-      <th style="text-align:center">✓ Nome</th>
-      <th style="text-align:center">✓ Società</th>
-      <th style="text-align:center">✓ Tipo</th>
-      <th style="text-align:center">✓ Ruolo</th>
-      <th style="text-align:center">✓ Nascita</th>
-      <th style="text-align:center">✓ C.F.</th>
-      <th style="text-align:center">✓ Telefono</th>
-      <th style="text-align:center">✓ Email</th>
-      <th style="text-align:center">✓ Note</th>
+      <th style="border-left:2px solid var(--border)">🎂 Nascita</th>
+      <th>🪪 C.F.</th>
+      <th>📞 Telefono</th>
+      <th>✉️ Email</th>
       <th></th>
     </tr></thead>
     <tbody>${lista.map(p=>{
@@ -4657,16 +4651,10 @@ function buildContrattiPersone(){
         <td style="text-align:center">${badgeDoc(!!p.contratto?.nomeFile,false)}</td>
         <td style="text-align:center">${badgeDoc(!!p.documentoIdentita?.nomeFile,false)}</td>
         <td style="text-align:center">${badgeDoc(!!p.certificatoMedico?.nomeFile,certScaduto)}</td>
-        <td style="text-align:center;border-left:2px solid var(--border)">${badgeDoc(!!p.cognome,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.nome,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.soc,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.tipo,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.ruolo,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.nascita,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.cf,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.telefono,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.email,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.note,false)}</td>
+        <td style="font-size:11px;border-left:2px solid var(--border)">${p.nascita?fmtData(p.nascita):'—'}</td>
+        <td style="font-size:11px">${p.cf||'—'}</td>
+        <td style="font-size:11px">${p.telefono||'—'}</td>
+        <td style="font-size:11px">${p.email||'—'}</td>
         <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="event.stopPropagation();apriDettaglioPersona('${p.id}')">Apri</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
