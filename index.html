@@ -3569,14 +3569,14 @@ async function cambiaRuoloUtente(uid,ruolo){
     <div id="pad-info" style="font-size:12px;color:var(--text2);margin-bottom:.8rem;line-height:1.6"></div>
 
     <div class="crm-interazioni" style="border-top:1px solid var(--border);padding-top:.8rem;margin-top:0">
-      <label class="form-label">📄 Contratto</label>
+      <label class="form-label" id="pad-contratto-label">📄 Contratto</label>
       <div id="pad-doc-contratto"></div>
     </div>
     <div class="crm-interazioni">
       <label class="form-label">🪪 Documento d'identità</label>
       <div id="pad-doc-identita"></div>
     </div>
-    <div class="crm-interazioni">
+    <div class="crm-interazioni" id="pad-certmed-wrap">
       <label class="form-label">⚕️ Certificato medico</label>
       <div id="pad-doc-certmed"></div>
     </div>
@@ -4643,14 +4643,24 @@ function buildContrattiPersone(){
     </tr></thead>
     <tbody>${lista.map(p=>{
       const certScaduto = p.certificatoMedico?.scadenza && p.certificatoMedico.scadenza < new Date().toISOString().slice(0,10);
+      const isProcuratore = p.tipo==='procuratori';
+      const nContratti = p.nContrattiProcura||0;
+      const cellaContratto = isProcuratore
+        ? (nContratti>0
+            ? `<span class="att-badge-mini" style="background:#C6EFCE;color:#1A5C38">${nContratti}</span>`
+            : `<span class="att-badge-mini">—</span>`)
+        : badgeDoc(!!p.contratto?.nomeFile,false);
+      const cellaCertMed = isProcuratore
+        ? `<span class="att-badge-mini" style="background:var(--bg3);color:var(--text3)" title="Non applicabile ai procuratori">n/d</span>`
+        : badgeDoc(!!p.certificatoMedico?.nomeFile,certScaduto);
       return `<tr style="cursor:pointer" onclick="apriDettaglioPersona('${p.id}')">
         <td><span class="badge-soc badge-${p.soc?.[0]?.toLowerCase()}">${p.soc}</span></td>
         <td style="font-weight:600">${p.cognome||'—'}</td>
         <td style="font-weight:600">${p.nome||'—'}</td>
         <td style="font-size:11px;color:var(--text2)">${p.ruolo||'—'}</td>
-        <td style="text-align:center">${badgeDoc(!!p.contratto?.nomeFile,false)}</td>
+        <td style="text-align:center">${cellaContratto}</td>
         <td style="text-align:center">${badgeDoc(!!p.documentoIdentita?.nomeFile,false)}</td>
-        <td style="text-align:center">${badgeDoc(!!p.certificatoMedico?.nomeFile,certScaduto)}</td>
+        <td style="text-align:center">${cellaCertMed}</td>
         <td style="font-size:11px;border-left:2px solid var(--border)">${p.nascita?fmtData(p.nascita):'—'}</td>
         <td style="font-size:11px">${p.cf||'—'}</td>
         <td style="font-size:11px">${p.telefono||'—'}</td>
@@ -4710,7 +4720,7 @@ async function salvaPersona(){
   }catch(e){ alert('Errore salvataggio anagrafica: '+e.message); }
 }
 
-function apriDettaglioPersona(id){
+async function apriDettaglioPersona(id){
   const p = contrattiPersone.find(x=>x.id===id);
   if(!p) return;
   window._personaDettaglioId = id;
@@ -4722,15 +4732,120 @@ function apriDettaglioPersona(id){
     ${p.telefono?'📞 '+p.telefono+' ':''}${p.email?'· ✉️ '+p.email:''}<br>
     ${p.note?'<b>Note:</b> '+p.note:''}`;
 
-  renderDocumentoPersona(p,'contratto','pad-doc-contratto','contratto_chunks');
+  const isProcuratore = p.tipo === 'procuratori';
+  // I procuratori non hanno certificato medico (non applicabile) e possono avere
+  // più contratti di procura, uno per ogni atleta che li ha scritturati — non un
+  // contratto singolo come staff/roster.
+  document.getElementById('pad-certmed-wrap').style.display = isProcuratore ? 'none' : '';
+  document.getElementById('pad-contratto-label').textContent = isProcuratore ? '📄 Contratti di Procura' : '📄 Contratto';
+
+  if(isProcuratore){
+    await renderContrattiProcura(p);
+  } else {
+    renderDocumentoPersona(p,'contratto','pad-doc-contratto','contratto_chunks');
+    renderDocumentoPersona(p,'certificatoMedico','pad-doc-certmed','certmed_chunks');
+  }
   renderDocumentoPersona(p,'documentoIdentita','pad-doc-identita','identita_chunks');
-  renderDocumentoPersona(p,'certificatoMedico','pad-doc-certmed','certmed_chunks');
 
   const btnMod = document.getElementById('pad-modifica-btn');
   const btnDel = document.getElementById('pad-elimina-btn');
   btnMod.onclick = ()=>apriModalPersona(id);
   btnDel.onclick = ()=>eliminaPersona(id);
   apriModal('modal-persona-detail');
+}
+
+// ── CONTRATTI DI PROCURA (solo procuratori: N contratti, uno per atleta scritturato) ──
+async function renderContrattiProcura(p){
+  const cont = document.getElementById('pad-doc-contratto');
+  cont.innerHTML = '<div style="font-size:11px;color:var(--text3)">Caricamento contratti...</div>';
+  const isAdmin = window.currentRuolo==='admin';
+  let contratti = [];
+  try{
+    const snap = await PERSONE_REF().doc(p.id).collection('contratti_procura').get();
+    contratti = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.dataCaricamento||'').localeCompare(a.dataCaricamento||''));
+  }catch(e){ cont.innerHTML = '<div style="color:var(--rosso);font-size:11px">Errore: '+e.message+'</div>'; return; }
+
+  const lista = contratti.length ? contratti.map(c=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:.5px solid var(--border)">
+      <span style="font-size:11px"><b>${c.atleta||'—'}</b> <span style="color:var(--text3)">— ${c.nomeFile}</span></span>
+      <span style="white-space:nowrap">
+        <button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriContrattoProcura('${p.id}','${c.id}')">📄 Apri</button>
+        ${isAdmin?`<button class="btn-del" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="eliminaContrattoProcura('${p.id}','${c.id}')">✕</button>`:''}
+      </span>
+    </div>`).join('') : '<div style="font-size:11px;color:var(--text3);padding:.3rem 0">Nessun contratto di procura caricato</div>';
+
+  const formAggiungi = isAdmin ? `
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:.6rem;flex-wrap:wrap">
+      <input type="text" class="form-input" id="pad-procura-atleta" placeholder="Nome atleta" style="flex:1;min-width:140px">
+      <input type="file" class="form-input" id="pad-procura-file" accept=".pdf,image/*" style="flex:1;min-width:140px">
+      <button class="btn btn-dark" style="font-size:11px" onclick="salvaContrattoProcura('${p.id}')">+ Aggiungi contratto</button>
+    </div>
+    <div id="pad-procura-progress" style="display:none;margin-top:.4rem;font-size:10px;color:var(--text2)">Caricamento...</div>` : '';
+
+  cont.innerHTML = lista + formAggiungi;
+}
+
+async function salvaContrattoProcura(personaId){
+  const atleta = document.getElementById('pad-procura-atleta').value.trim();
+  const file = document.getElementById('pad-procura-file').files[0];
+  if(!atleta){ alert("Inserisci il nome dell'atleta."); return; }
+  if(!file){ alert('Seleziona un file.'); return; }
+  const prog = document.getElementById('pad-procura-progress');
+  prog.style.display='block'; prog.textContent='Lettura file...';
+  try{
+    const b64 = await fileToBase64(file);
+    prog.textContent='Salvataggio su cloud...';
+    const nChunk = Math.ceil(b64.length/CHUNK_SIZE);
+    const contrattoRef = PERSONE_REF().doc(personaId).collection('contratti_procura').doc();
+    for(let i=0;i<nChunk;i++){
+      await contrattoRef.collection('chunks').doc('chunk_'+i).set({data:b64.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), idx:i});
+    }
+    await contrattoRef.set({ atleta, nomeFile:file.name, nChunk, dataCaricamento:new Date().toISOString(), caricatoDa:window._currentUser?.nome||'sistema' });
+    await PERSONE_REF().doc(personaId).update({ nContrattiProcura: firebase.firestore.FieldValue.increment(1) });
+    prog.textContent='Caricato!';
+    await caricaContrattiPersone();
+    const p = contrattiPersone.find(x=>x.id===personaId);
+    await renderContrattiProcura(p);
+  }catch(e){ alert('Errore: '+e.message); prog.style.display='none'; }
+}
+
+async function apriContrattoProcura(personaId, contrattoId){
+  try{
+    const contrattoRef = PERSONE_REF().doc(personaId).collection('contratti_procura').doc(contrattoId);
+    const docSnap = await contrattoRef.get();
+    const doc = docSnap.data();
+    if(!doc){ alert('Contratto non trovato.'); return; }
+    const chunks = [];
+    for(let i=0;i<doc.nChunk;i++){
+      const cs = await contrattoRef.collection('chunks').doc('chunk_'+i).get();
+      if(cs.exists) chunks.push(cs.data().data);
+    }
+    const b64 = chunks.join('');
+    const byteStr = atob(b64.split(',')[1]||b64);
+    const ab = new ArrayBuffer(byteStr.length);
+    const ia = new Uint8Array(ab);
+    for(let i=0;i<byteStr.length;i++) ia[i]=byteStr.charCodeAt(i);
+    const mimeType = doc.nomeFile?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/*';
+    const blob = new Blob([ab],{type:mimeType});
+    const url = URL.createObjectURL(blob);
+    window.open(url,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }catch(e){ alert('Errore apertura contratto: '+e.message); }
+}
+
+async function eliminaContrattoProcura(personaId, contrattoId){
+  if(!confirm('Eliminare questo contratto di procura?')) return;
+  try{
+    const contrattoRef = PERSONE_REF().doc(personaId).collection('contratti_procura').doc(contrattoId);
+    const docSnap = await contrattoRef.get();
+    const nChunk = docSnap.data()?.nChunk||0;
+    for(let i=0;i<nChunk;i++){ await contrattoRef.collection('chunks').doc('chunk_'+i).delete(); }
+    await contrattoRef.delete();
+    await PERSONE_REF().doc(personaId).update({ nContrattiProcura: firebase.firestore.FieldValue.increment(-1) });
+    await caricaContrattiPersone();
+    const p = contrattiPersone.find(x=>x.id===personaId);
+    await renderContrattiProcura(p);
+  }catch(e){ alert('Errore: '+e.message); }
 }
 
 // Rendering generico per uno dei 3 tipi di documento — evita di triplicare la stessa logica
@@ -4825,12 +4940,21 @@ async function eliminaDocumentoPersona(personaId, campo, subcollectionName){
 
 async function eliminaPersona(id){
   const p = contrattiPersone.find(x=>x.id===id);
-  if(!confirm(`Eliminare definitivamente l'anagrafica di "${p?.cognome} ${p?.nome}"? Rimuove anche tutti i documenti collegati (contratto, identità, certificato). L'operazione non è reversibile.`)) return;
+  if(!confirm(`Eliminare definitivamente l'anagrafica di "${p?.cognome} ${p?.nome}"? Rimuove anche tutti i documenti collegati. L'operazione non è reversibile.`)) return;
   try{
     // Ripulisce le sotto-collection dei documenti prima di eliminare il documento principale
     for(const [campo, sub] of [['contratto','contratto_chunks'],['documentoIdentita','identita_chunks'],['certificatoMedico','certmed_chunks']]){
       const nChunk = p?.[campo]?.nChunk||0;
       for(let i=0;i<nChunk;i++){ await PERSONE_REF().doc(id).collection(sub).doc('chunk_'+i).delete(); }
+    }
+    // Procuratori: ripulisce anche tutti i contratti di procura (ognuno con i propri chunk)
+    if(p?.tipo==='procuratori'){
+      const snap = await PERSONE_REF().doc(id).collection('contratti_procura').get();
+      for(const cDoc of snap.docs){
+        const nChunk = cDoc.data()?.nChunk||0;
+        for(let i=0;i<nChunk;i++){ await cDoc.ref.collection('chunks').doc('chunk_'+i).delete(); }
+        await cDoc.ref.delete();
+      }
     }
     await PERSONE_REF().doc(id).delete();
     chiudiModal('modal-persona-detail');
