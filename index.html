@@ -251,9 +251,12 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
     <div class="loghi" id="login-loghi"></div>
     <h2>Gruppo Virtus</h2>
     <div class="sub">Gestionale Contabile 2026/2027</div>
-    <input type="email" id="login-email" placeholder="Email" autocomplete="email">
-    <input type="password" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
-    <button class="btn-login" onclick="doLogin()">Accedi</button>
+    <div id="login-form-fields">
+      <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+      <input type="password" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="btn-login" id="login-btn" onclick="doLogin()">Accedi</button>
+    </div>
+    <div id="login-loading" style="display:none;padding:1rem 0;color:var(--text2);font-size:13px">🔄 Connessione in corso...</div>
     <div class="err" id="login-err"></div>
   </div>
 </div>
@@ -3203,9 +3206,14 @@ window.doLogin = async function(){
   const err   = document.getElementById('login-err');
   err.textContent='';
   if(!email||!pass){ err.textContent='Inserisci email e password.'; return; }
+  document.getElementById('login-form-fields').style.display='none';
+  document.getElementById('login-loading').style.display='block';
+  document.getElementById('login-loading').textContent='🔄 Accesso in corso...';
   try{
     await auth.signInWithEmailAndPassword(email,pass);
   }catch(e){
+    document.getElementById('login-form-fields').style.display='';
+    document.getElementById('login-loading').style.display='none';
     err.textContent = (e.code==='auth/invalid-credential'||e.code==='auth/wrong-password')
       ? 'Credenziali non valide.' : 'Errore: '+e.message;
   }
@@ -3222,6 +3230,13 @@ window.doLogout = async function(){
 // ── AUTH STATE ──
 auth.onAuthStateChanged(async function(user){
   if(user){
+    // Mostra sempre il messaggio di caricamento durante questa fase, anche se onAuthStateChanged
+    // scatta da solo (es. refresh pagina con sessione già attiva) senza passare da doLogin().
+    document.getElementById('login-overlay').style.display='flex';
+    document.getElementById('login-form-fields').style.display='none';
+    document.getElementById('login-loading').style.display='block';
+    document.getElementById('login-loading').textContent='🔄 Verifica account...';
+    document.getElementById('login-err').textContent='';
     try{
       // Inizializza admin se primo accesso
       const ref = db.collection('utenti').doc(user.uid);
@@ -3231,6 +3246,8 @@ auth.onAuthStateChanged(async function(user){
       }
       const profilo = (await ref.get()).data();
       if(profilo.stato!=='approvato'){
+        document.getElementById('login-form-fields').style.display='';
+        document.getElementById('login-loading').style.display='none';
         document.getElementById('login-err').textContent='Account non ancora approvato.';
         await auth.signOut(); return;
       }
@@ -3238,12 +3255,12 @@ auth.onAuthStateChanged(async function(user){
       window.currentRuolo = profilo.ruolo;
       document.body.classList.remove('role-admin','role-editor','role-visitor');
       document.body.classList.add('role-'+(profilo.ruolo||'visitor'));
-      document.getElementById('login-overlay').style.display='none';
       document.getElementById('user-bar-name').textContent = profilo.nome||user.email;
       document.getElementById('ruolo-badge').textContent = profilo.ruolo?.toUpperCase();
       const lb = document.getElementById('logout-btn');
       if(lb) lb.style.display='block';
-      // Carica dati
+      // Carica dati — è il passaggio più a rischio se la connessione è instabile
+      document.getElementById('login-loading').textContent='🔄 Caricamento dati contabili...';
       await window.caricaDatiFirestore();
       if(!_listenerUnsubscribe) _listenerUnsubscribe = window.avviaListenerDati();
       if(!_crmListenerUnsubscribe) _crmListenerUnsubscribe = window.avviaListenerCRM();
@@ -3252,6 +3269,8 @@ auth.onAuthStateChanged(async function(user){
       renderPianoConti();
       aggiornaDatalist();
       buildHome();
+      // Tutto pronto: ora si può nascondere l'overlay
+      document.getElementById('login-overlay').style.display='none';
       // Mostra pagina di benvenuto
       document.querySelector('.sidebar').style.display = 'none';
       showPage('benvenuto', null);
@@ -3266,10 +3285,22 @@ auth.onAuthStateChanged(async function(user){
         if(info) info.textContent = 'Accesso come '+profilo.nome+' · '+(profilo.ruolo||'').toUpperCase()+' · '+new Date().toLocaleDateString('it-IT');
       }, 100);
     }catch(e){
-      document.getElementById('login-err').textContent='Errore: '+e.message;
+      // Errore in qualsiasi punto della sequenza (tipicamente problemi di connessione):
+      // ripristina un login visibile con un messaggio chiaro, invece di lasciare l'app
+      // bloccata su una schermata vuota senza nessuna spiegazione — è quello che
+      // probabilmente è successo quando Firestore non ha risposto entro 10 secondi.
+      document.getElementById('login-form-fields').style.display='';
+      document.getElementById('login-loading').style.display='none';
+      document.getElementById('login-overlay').style.display='flex';
+      const messaggioRete = /unavailable|network|backend|offline/i.test(e.message||'')
+        ? 'Connessione instabile: verifica la rete e riprova ad accedere.'
+        : 'Errore: '+e.message;
+      document.getElementById('login-err').textContent = messaggioRete;
     }
   } else {
     document.getElementById('login-overlay').style.display='flex';
+    document.getElementById('login-form-fields').style.display='';
+    document.getElementById('login-loading').style.display='none';
     const lb = document.getElementById('logout-btn');
     if(lb) lb.style.display='none';
   }
