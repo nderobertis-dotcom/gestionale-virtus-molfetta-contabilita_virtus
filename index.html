@@ -3228,6 +3228,15 @@ window.doLogout = async function(){
 };
 
 // ── AUTH STATE ──
+// Impone un limite di tempo a una promise: se non risponde entro N ms, fallisce
+// con un errore riconoscibile invece di restare in attesa indefinitamente.
+function conTimeout(promise, ms, messaggio){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(messaggio||'Timeout: nessuna risposta dal server.')), ms))
+  ]);
+}
+
 auth.onAuthStateChanged(async function(user){
   if(user){
     // Mostra sempre il messaggio di caricamento durante questa fase, anche se onAuthStateChanged
@@ -3240,11 +3249,11 @@ auth.onAuthStateChanged(async function(user){
     try{
       // Inizializza admin se primo accesso
       const ref = db.collection('utenti').doc(user.uid);
-      const snap = await ref.get();
+      const snap = await conTimeout(ref.get(), 15000, 'Connessione instabile: il server non risponde da troppo tempo.');
       if(!snap.exists){
-        await ref.set({ nome:user.displayName||user.email.split('@')[0], email:user.email, ruolo:'admin', stato:'approvato', creatoIl:new Date().toISOString() });
+        await conTimeout(ref.set({ nome:user.displayName||user.email.split('@')[0], email:user.email, ruolo:'admin', stato:'approvato', creatoIl:new Date().toISOString() }), 15000);
       }
-      const profilo = (await ref.get()).data();
+      const profilo = (await conTimeout(ref.get(), 15000)).data();
       if(profilo.stato!=='approvato'){
         document.getElementById('login-form-fields').style.display='';
         document.getElementById('login-loading').style.display='none';
@@ -3261,7 +3270,7 @@ auth.onAuthStateChanged(async function(user){
       if(lb) lb.style.display='block';
       // Carica dati — è il passaggio più a rischio se la connessione è instabile
       document.getElementById('login-loading').textContent='🔄 Caricamento dati contabili...';
-      await window.caricaDatiFirestore();
+      await conTimeout(window.caricaDatiFirestore(), 20000, 'Connessione instabile: il caricamento dei dati sta impiegando troppo tempo.');
       if(!_listenerUnsubscribe) _listenerUnsubscribe = window.avviaListenerDati();
       if(!_crmListenerUnsubscribe) _crmListenerUnsubscribe = window.avviaListenerCRM();
       caricaCrmPermessi();
