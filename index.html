@@ -522,6 +522,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <option value="5">5 — Ricavi</option>
         </select>
         <input type="text" id="mast-search" class="form-input" placeholder="🔍 Cerca conto..." style="width:180px" oninput="buildMastrini()">
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalPrimaNotaDaMastrini()">+ Nuova Registrazione</button>
       </div>
       <div id="mastrini-container"></div>
     </div>
@@ -1187,6 +1188,12 @@ let _editRegId = null;
 let _pdRighe = [];
 let _pdRigaContoTarget = null; // indice della riga prima nota in attesa di un nuovo conto appena creato
 
+function apriModalPrimaNotaDaMastrini(){
+  openModalPrimaNota(); // nuova registrazione vuota, stesso modal di Prima Nota
+  const filtSoc = document.getElementById('mast-soc')?.value;
+  if(filtSoc) document.getElementById('pn-soc').value = filtSoc; // comodo: riprende la società che stavi già guardando
+}
+
 function openModalPrimaNota(id){
   _editRegId = id || null;
   const reg = id ? registrazioni.find(r=>r.id===id) : null;
@@ -1265,6 +1272,8 @@ async function salvaPrimaNota(){
   const desc = document.getElementById('pn-desc').value.trim();
   if(!data||!soc||!desc){ alert('Compila almeno data, società e descrizione.'); return; }
   if(_pdRighe.length < 2){ alert('Inserisci almeno due righe (dare e avere).'); return; }
+  const rigaSenzaConto = _pdRighe.findIndex(r=>!r.contoId);
+  if(rigaSenzaConto>=0){ alert(`Seleziona un conto per la riga ${rigaSenzaConto+1}: senza conto la registrazione si salva ma resta invisibile nei mastrini, sembra "non salvata".`); return; }
 
   const totDare  = _pdRighe.reduce((s,r)=>s+(parseFloat(r.dare)||0),0);
   const totAvere = _pdRighe.reduce((s,r)=>s+(parseFloat(r.avere)||0),0);
@@ -1318,8 +1327,10 @@ async function salvaPrimaNota(){
     if(window.salvaEAggiorna) await window.salvaEAggiorna();
     buildScadenzario();
   }
-  // Offri piano rateazione per conti crediti/debiti (solo nuove registrazioni)
-  if(!_editRegId){
+  // Offri piano rateazione per conti crediti/debiti (solo nuove registrazioni,
+  // e solo se non stiamo saldando una rata già esistente — in quel caso non ha senso
+  // proporne subito un'altra per lo stesso conto)
+  if(!_editRegId && !saldaRataId){
     const contiRateabili = rec.righe.filter(r=>isContoRateabile(r.contoId));
     if(contiRateabili.length>0){
       const cr = contiRateabili[0];
