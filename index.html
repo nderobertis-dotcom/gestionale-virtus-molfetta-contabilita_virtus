@@ -3155,32 +3155,59 @@ let _salvataggiInCorso = 0; // contatore, non booleano: salvataggi sovrapposti n
 
 window.salvaDatiFirestore = async function(){
   _salvataggiInCorso++;
+  mostraStatoSalvataggio('in-corso');
   try{
     await DATI_REF().set({
       pianoConti, registrazioni, bilancioApertura, scadenzario, pianiRateazione,
       aggiornatoIl: new Date().toISOString(),
       aggiornatoDa: window._currentUser?.nome||'sistema'
     });
-  }catch(e){ console.error('Errore salvataggio:',e.message); }
+    mostraStatoSalvataggio('ok');
+  }catch(e){
+    console.error('Errore salvataggio:',e.message);
+    mostraStatoSalvataggio('errore', e.message);
+  }
   finally{ setTimeout(()=>{ _salvataggiInCorso = Math.max(0,_salvataggiInCorso-1); }, 1000); }
 };
 
-window.salvaEAggiorna = async function(){
-  await window.salvaDatiFirestore();
-  mostraSalvataggio();
-};
-
-function mostraSalvataggio(){
+// Indicatore visibile dello stato di salvataggio — prima non c'era nulla mentre
+// il salvataggio era IN CORSO (solo un lampo verde a fine operazione), quindi un
+// salvataggio lento o fallito passava del tutto inosservato finché non si
+// controllava manualmente se i dati fossero davvero arrivati.
+function mostraStatoSalvataggio(stato, dettaglio){
   let el = document.getElementById('sync-indicator');
   if(!el){
     el = document.createElement('div');
     el.id='sync-indicator';
-    el.style.cssText='position:fixed;bottom:16px;right:16px;background:#1A5C38;color:#fff;font-size:11px;font-weight:700;padding:6px 14px;border-radius:20px;z-index:9000;transition:opacity .4s;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+    el.style.cssText='position:fixed;bottom:16px;right:16px;font-size:11px;font-weight:700;padding:6px 14px;border-radius:20px;z-index:9000;transition:opacity .3s;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.2);color:#fff';
     document.body.appendChild(el);
   }
-  el.textContent='✅ Salvato su cloud';
-  el.style.opacity='1';
-  setTimeout(()=>{ el.style.opacity='0'; },2500);
+  if(stato==='in-corso'){
+    el.style.background='#1565C0';
+    el.textContent='🔄 Salvataggio in corso...';
+    el.style.opacity='1';
+  } else if(stato==='ok'){
+    el.style.background='#1A5C38';
+    el.textContent='✅ Salvato su cloud';
+    el.style.opacity='1';
+    setTimeout(()=>{ el.style.opacity='0'; },2500);
+  } else if(stato==='errore'){
+    el.style.background='#C0392B';
+    el.textContent='⚠️ Salvataggio fallito: '+(dettaglio||'errore sconosciuto')+' — riprova';
+    el.style.opacity='1';
+    el.style.pointerEvents='auto';
+    el.style.cursor='pointer';
+    el.onclick=()=>{ el.style.opacity='0'; el.style.pointerEvents='none'; };
+    // Non si nasconde da solo: un salvataggio fallito deve restare visibile finché non lo chiudi tu
+  }
+}
+
+window.salvaEAggiorna = async function(){
+  await window.salvaDatiFirestore(); // mostra già da sé lo stato (in corso/ok/errore)
+};
+
+function mostraSalvataggio(){
+  mostraStatoSalvataggio('ok');
 }
 
 // ── CARICAMENTO ──
