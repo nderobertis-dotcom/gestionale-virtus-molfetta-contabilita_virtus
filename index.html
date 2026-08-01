@@ -1414,10 +1414,12 @@ function renderPrimaNota(){
 }
 
 function delRegistrazione(id){
-  if(!confirm('Eliminare questa registrazione?')) return;
+  if(!confirm('Eliminare questa registrazione? Rimuove anche eventuali scadenze e piani di rateazione collegati a questa scrittura. L\'operazione non è reversibile.')) return;
   registrazioni = registrazioni.filter(r=>r.id!==id);
   scadenzario   = scadenzario.filter(s=>s.regId!==id);
-  renderPrimaNota();
+  pianiRateazione = pianiRateazione.filter(p=>p.regId!==id);
+  if(document.getElementById('page-primanota')?.classList.contains('active')) renderPrimaNota();
+  if(document.getElementById('page-mastrini')?.classList.contains('active')) buildMastrini();
   window.salvaEAggiorna && window.salvaEAggiorna();
 }
 
@@ -1640,11 +1642,11 @@ function buildMastrini(){
             : '';
           return `
           <div class="mastrino-td" style="white-space:nowrap;font-size:11px">${fmtData(m.data)}</div>
-          <div class="mastrino-td" style="font-size:11px">${m.desc}${m.rif?` <span style="color:var(--text2)">(${m.rif})</span>`:''}</div>
+          <div class="mastrino-td" style="font-size:11px">${m.desc}${m.rif?` <span style="color:var(--text2)">(${m.rif})</span>`:''}${m.tipo==='mov'?` <span class="att-badge-mini" style="cursor:help" title="ID registrazione completo: ${m.regId}">#${(m.regId||'').slice(-6)}</span>`:''}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--dare)">${m.dare?fmt(m.dare):'—'}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--avere)">${m.avere?fmt(m.avere):'—'}</div>
           <div class="mastrino-td ${spClass}">${fmt(Math.abs(saldoProg))} ${spLabel}</div>
-          <div class="mastrino-td" style="white-space:nowrap">${rateBtn}${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="openModalPrimaNota('${m.regId}')">✏</button>`:''}</div>`;
+          <div class="mastrino-td" style="white-space:nowrap">${rateBtn}${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="openModalPrimaNota('${m.regId}')">✏</button><button class="btn-del" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="delRegistrazione('${m.regId}')">🗑</button>`:''}</div>`;
         }).join('')}
         <div class="mastrino-td" style="font-weight:700;background:var(--bg3)">TOTALE</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
