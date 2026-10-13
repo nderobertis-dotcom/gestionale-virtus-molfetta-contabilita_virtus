@@ -3518,7 +3518,7 @@ async function cambiaRuoloUtente(uid,ruolo){
     <input type="hidden" id="uf-id">
     <div class="two-col">
       <div class="form-row"><label class="form-label">Società</label>
-        <select class="form-input" id="uf-soc">
+        <select class="form-input" id="uf-soc" onchange="ufMgrCliente()">
           <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
         </select>
       </div>
@@ -3532,7 +3532,7 @@ async function cambiaRuoloUtente(uid,ruolo){
       <input type="text" class="form-input" id="uf-nr" placeholder="es. FT 001/2026">
     </div>
     <div class="form-row"><label class="form-label">Cliente / Sponsor</label>
-      <input type="text" class="form-input" id="uf-cliente" placeholder="Nome cliente...">
+      <input type="text" class="form-input" id="uf-cliente" placeholder="Nome cliente..." oninput="ufMgrCliente()">
     </div>
     <div class="form-row"><label class="form-label">Data fattura</label>
       <input type="date" class="form-input" id="uf-data">
@@ -3546,6 +3546,10 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
     </div>
     <div id="uf-totale-prev" style="font-size:12px;color:var(--text2);margin:-.2rem 0 .8rem"></div>
+    <div class="form-row"><label class="form-label">MGR % (da CRM Sponsor, modificabile)</label>
+      <input type="number" step="0.01" min="0" max="100" class="form-input" id="uf-mgr" placeholder="0–100" style="max-width:140px" oninput="_ufMgrToccato=true;aggiornaMgrHint()">
+      <div id="uf-mgr-hint" style="font-size:11px;color:var(--text2);margin-top:.3rem"></div>
+    </div>
     <div class="form-row"><label class="form-label" id="uf-file-label">File PDF</label>
       <input type="file" class="form-input" id="uf-file" accept=".pdf" onchange="const f=this.files[0];document.getElementById('uf-preview').textContent=f?f.name+' ('+(f.size/1024).toFixed(0)+' KB)':''">
       <div id="uf-preview" style="margin-top:.4rem;font-size:11px;color:var(--text2)"></div>
@@ -4646,6 +4650,7 @@ function sponsorPerFattura(f){
 }
 function mgrFattura(f){
   const sp = sponsorPerFattura(f);
+  if(f.mgr!==undefined && f.mgr!==null && f.mgr!=='') return {mgr:Number(f.mgr), sponsor:sp, nd:false, manuale:true};
   const ha = sp && sp.mgr!==undefined && sp.mgr!==null && sp.mgr!=='';
   return {mgr: ha?Number(sp.mgr):0, sponsor:sp, nd:!ha};
 }
@@ -4693,7 +4698,7 @@ function buildFattureAttive(){
     <div class="metric"><div class="metric-label">Dinamo (totale)</div><div class="metric-value">${fmt(_soc('DINAMO'))}</div></div>
     <div class="metric"><div class="metric-label">Invicta (totale)</div><div class="metric-value">${fmt(_soc('INVICTA'))}</div></div>`;
   // Clienti senza sponsor abbinato in CRM (MGR considerato 0)
-  const _senzaSp = [...new Set(lista.filter(f=>!sponsorPerFattura(f)).map(f=>(f.cliente||'—').trim()))];
+  const _senzaSp = [...new Set(lista.filter(f=>!sponsorPerFattura(f) && !mgrFattura(f).manuale).map(f=>(f.cliente||'—').trim()))];
   const _avv = document.getElementById('fa-avviso');
   if(_avv) _avv.innerHTML = _senzaSp.length ? `<div style="font-size:11px;color:var(--text2);margin-bottom:.8rem">⚠ ${_senzaSp.length} client${_senzaSp.length===1?'e':'i'} senza sponsor abbinato in CRM (MGR = 0): ${_senzaSp.slice(0,8).join(' · ')}${_senzaSp.length>8?' …':''}</div>` : '';
 
@@ -4739,7 +4744,7 @@ function buildFattureAttive(){
       <td>${f.cliente||'—'}</td>
       ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f), st=i.stimato?' title="Stimato: importo inserito a mano considerato totale con IVA 22%. Modifica la fattura per indicare imponibile e IVA esatti" style="color:var(--text3)"':'';
         return `<td class="num"${st}>${i.stimato?'~':''}${fmt(i.imp)}</td><td class="num"${st}>${i.stimato?'~':''}${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
-        <td class="num" style="${m.sponsor&&!m.nd?'':'color:var(--text3)'}" title="${m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
+        <td class="num" style="${m.sponsor&&!m.nd?'':'color:var(--text3)'}" title="${m.manuale?'MGR impostato su questa fattura'+(m.sponsor?' (diverso dal CRM: '+m.sponsor.nome+')':''):m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
         <td class="num">${fmt(importoMgr(f))}</td>`; })()}
       <td>${f.anno||'—'}</td>
       <td>${f.senzaPdf?'<span style="font-size:10px;color:var(--text3)" title="Importata da XML: nessun PDF allegato. Usa Modifica per allegarlo">— no PDF</span>':`<button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button>${f.pdfDaXml?'<div style="font-size:9px;color:var(--text3)">copia di cortesia</div>':''}`}</td>
@@ -4948,12 +4953,35 @@ function apriModalUploadFattura(){
   document.getElementById('uf-imponibile').value = '';
   document.getElementById('uf-aliquota').value = '22';
   window._ufImportiOrig = null;
+  _ufMgrToccato = false;
+  document.getElementById('uf-mgr').value = '';
+  aggiornaMgrHint();
   aggiornaTotaleFattura();
   document.getElementById('uf-preview').textContent = '';
   document.getElementById('uf-progress').style.display = 'none';
   apriModal('modal-upload-fattura');
 }
 
+let _ufMgrToccato = false;
+function _mgrCrm(cliente, soc){
+  const sp = sponsorPerFattura({cliente, soc});
+  const ha = sp && sp.mgr!==undefined && sp.mgr!==null && sp.mgr!=='';
+  return {sp, mgr: ha?Number(sp.mgr):null};
+}
+function aggiornaMgrHint(){
+  const cl = document.getElementById('uf-cliente').value, soc = document.getElementById('uf-soc').value;
+  const v = document.getElementById('uf-mgr').value.trim();
+  const c = _mgrCrm(cl, soc);
+  let t;
+  if(!c.sp) t = 'Sponsor non trovato in CRM: se lasci vuoto MGR = 0.';
+  else if(c.mgr===null) t = `Sponsor "${c.sp.nome}" trovato in CRM ma senza MGR: se lasci vuoto MGR = 0.`;
+  else t = `CRM (${c.sp.nome}): ${c.mgr}%` + (v!=='' && Number(v)!==c.mgr ? ' — valore diverso: vale solo per questa fattura, il CRM non cambia.' : '');
+  document.getElementById('uf-mgr-hint').textContent = t;
+}
+function ufMgrCliente(){ // cliente/società cambiati: se MGR non toccato a mano, riallinea al CRM
+  if(!_ufMgrToccato){ const c=_mgrCrm(document.getElementById('uf-cliente').value, document.getElementById('uf-soc').value); document.getElementById('uf-mgr').value = c.mgr===null?'':c.mgr; }
+  aggiornaMgrHint();
+}
 function aggiornaTotaleFattura(){
   const imp = parseFloat(document.getElementById('uf-imponibile').value)||0;
   const al  = parseFloat(document.getElementById('uf-aliquota').value)||0;
@@ -4978,6 +5006,10 @@ function apriModalModificaFattura(id){
   document.getElementById('uf-imponibile').value = _i.imp||'';
   document.getElementById('uf-aliquota').value = _i.imp ? String(Math.round(_i.iva/_i.imp*10000)/100) : '22';
   window._ufImportiOrig = document.getElementById('uf-imponibile').value+'|'+document.getElementById('uf-aliquota').value;
+  const _mf = mgrFattura(f);
+  _ufMgrToccato = !!_mf.manuale;
+  document.getElementById('uf-mgr').value = (_mf.manuale || (_mf.sponsor && !_mf.nd)) ? _mf.mgr : '';
+  aggiornaMgrHint();
   aggiornaTotaleFattura();
   document.getElementById('uf-file').value = '';
   document.getElementById('uf-preview').textContent = '';
@@ -5003,6 +5035,16 @@ async function salvaFatturaPDF(){
 
   if(!nr||!cliente){ alert('Inserisci numero fattura e cliente.'); return; }
 
+  // MGR: memorizzato sulla fattura solo se diverso dal valore in CRM (altrimenti continua a seguire il CRM)
+  let mgrOverride = null;
+  const mgrRaw = document.getElementById('uf-mgr').value.trim();
+  if(mgrRaw!==''){
+    const v = Number(mgrRaw);
+    if(isNaN(v) || v<0 || v>100){ alert('MGR deve essere un numero tra 0 e 100.'); return; }
+    const c = _mgrCrm(cliente, soc);
+    if(c.mgr===null || v!==c.mgr) mgrOverride = v;
+  }
+
   if(editId){
     const old = fattureAttive.find(x=>x.id===editId);
     const prog = document.getElementById('uf-progress');
@@ -5014,6 +5056,7 @@ async function salvaFatturaPDF(){
       const importiCambiati = (document.getElementById('uf-imponibile').value+'|'+document.getElementById('uf-aliquota').value) !== window._ufImportiOrig;
       const upd = { soc, nr, cliente, data, anno, modificatoIl:new Date().toISOString(), modificatoDA:window._currentUser?.nome||'' };
       if(importiCambiati) Object.assign(upd,{ importo, imponibile, iva });
+      upd.mgr = mgrOverride!==null ? mgrOverride : firebase.firestore.FieldValue.delete();
       if(file){
         const b64 = await fileToBase64(file);
         const nChunk = Math.ceil(b64.length / CHUNK_SIZE);
@@ -5052,7 +5095,7 @@ async function salvaFatturaPDF(){
     txt.textContent = 'Salvataggio su cloud...';
 
     // Salva in Firestore (se > 900KB usa subcollection per il PDF)
-    const meta = { soc, nr, cliente, data, importo, imponibile, iva, anno, nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||'' };
+    const meta = { soc, nr, cliente, data, importo, imponibile, iva, anno, ...(mgrOverride!==null?{mgr:mgrOverride}:{}), nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||'' };
 
     await salvaPDFaChunk(FA_REF(), meta, b64, file.name);
 
