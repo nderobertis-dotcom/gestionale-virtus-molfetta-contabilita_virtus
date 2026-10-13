@@ -4688,10 +4688,9 @@ function buildFattureAttive(){
   const _totImp = _sum(_I,x=>x.i.imp), _totIva = _sum(_I,x=>x.i.iva), _totTot = _sum(_I,x=>x.i.tot);
   const _totNetto = _sum(lista,f=>importoMgr(f));
   const _soc = k=>_sum(_I.filter(x=>x.f.soc===k),x=>x.i.tot);
-  const _stim = _I.filter(x=>x.i.stimato).length;
   const _m = document.getElementById('fa-metrics');
   if(_m) _m.innerHTML = `
-    <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div>${_stim?`<div style="font-size:10px;color:var(--text3)">${_stim} con IVA stimata (~)</div>`:''}</div>
+    <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div></div>
     <div class="metric"><div class="metric-label">Imponibile</div><div class="metric-value">${fmt(_totImp)}</div></div>
     <div class="metric"><div class="metric-label">IVA</div><div class="metric-value">${fmt(_totIva)}</div></div>
     <div class="metric"><div class="metric-label">Totale fatturato</div><div class="metric-value">${fmt(_totTot)}</div></div>
@@ -4744,8 +4743,8 @@ function buildFattureAttive(){
       <td style="font-weight:600">${f.nr||'—'}</td>
       <td style="white-space:nowrap">${fmtData(f.data)}</td>
       <td>${f.cliente||'—'}</td>
-      ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f), st=i.stimato?' title="Stimato: importo inserito a mano considerato totale con IVA 22%. Modifica la fattura per indicare imponibile e IVA esatti" style="color:var(--text3)"':'';
-        return `<td class="num"${st}>${i.stimato?'~':''}${fmt(i.imp)}</td><td class="num"${st}>${i.stimato?'~':''}${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
+      ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f);
+        return `<td class="num">${fmt(i.imp)}</td><td class="num">${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
         <td class="num" style="${(m.manuale||(m.sponsor&&!m.nd))?'':'color:var(--text3)'}" title="${m.manuale?'MGR impostato su questa fattura'+(m.sponsor?' (diverso dal CRM: '+m.sponsor.nome+')':''):m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
         <td class="num">${fmt(importoMgr(f))}</td>`; })()}
       <td>${f.anno||'—'}</td>
