@@ -4746,7 +4746,7 @@ function buildFattureAttive(){
       <td>${f.cliente||'—'}</td>
       ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f), st=i.stimato?' title="Stimato: importo inserito a mano considerato totale con IVA 22%. Modifica la fattura per indicare imponibile e IVA esatti" style="color:var(--text3)"':'';
         return `<td class="num"${st}>${i.stimato?'~':''}${fmt(i.imp)}</td><td class="num"${st}>${i.stimato?'~':''}${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
-        <td class="num" style="${m.sponsor&&!m.nd?'':'color:var(--text3)'}" title="${m.manuale?'MGR impostato su questa fattura'+(m.sponsor?' (diverso dal CRM: '+m.sponsor.nome+')':''):m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
+        <td class="num" style="${(m.manuale||(m.sponsor&&!m.nd))?'':'color:var(--text3)'}" title="${m.manuale?'MGR impostato su questa fattura'+(m.sponsor?' (diverso dal CRM: '+m.sponsor.nome+')':''):m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
         <td class="num">${fmt(importoMgr(f))}</td>`; })()}
       <td>${f.anno||'—'}</td>
       <td>${f.senzaPdf?'<span style="font-size:10px;color:var(--text3)" title="Importata da XML: nessun PDF allegato. Usa Modifica per allegarlo">— no PDF</span>':`<button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button>${f.pdfDaXml?'<div style="font-size:9px;color:var(--text3)">copia di cortesia</div>':''}`}</td>
@@ -4888,39 +4888,50 @@ async function leggiImportXml(){
 function rielaboraImportXml(){
   const soc = document.getElementById('ix-soc').value;
   const chiave = (n)=>nrNormalizzato(n).toUpperCase();
-  const esist = new Set(fattureAttive.filter(f=>f.soc===soc).map(f=>chiave(f.nr)));
+  const esist = new Map();
+  fattureAttive.filter(f=>f.soc===soc).forEach(f=>{ const k=chiave(f.nr); if(!esist.has(k)) esist.set(k,f); });
   const viste = new Set();
   _ixRighe.forEach(r=>{
     if(r.errore){ r.stato='Errore'; return; }
     r.importo = r.totale;
     const k = chiave(r.nr);
-    if(esist.has(k)) r.stato='Già presente';
+    const e = esist.get(k);
+    delete r.docId;
+    if(e){
+      const senzaEsatti = !(typeof e.imponibile==='number' && typeof e.iva==='number');
+      if(!senzaEsatti) r.stato='Già presente';
+      else if(Math.round((parseFloat(e.importo)||0)*100)===Math.round(r.totale*100)){ r.stato='Aggiorna importi'; r.docId=e.id; }
+      else r.stato=`Già presente (totale diverso: ${fmt(parseFloat(e.importo)||0)})`;
+    }
     else if(viste.has(k)) r.stato='Duplicato nei file';
     else { r.stato='Nuova'; viste.add(k); }
   });
   _ixRighe.sort((a,b)=>(a.data||'').localeCompare(b.data||'')||(a.nr||'').localeCompare(b.nr||'','it',{numeric:true}));
   const nuove=_ixRighe.filter(r=>r.stato==='Nuova');
+  const agg=_ixRighe.filter(r=>r.stato==='Aggiorna importi');
   const tot=nuove.reduce((a,r)=>a+r.importo,0);
   const altroCed = _ixRighe.filter(r=>r.cedente && !r.cedente.toUpperCase().includes(soc)).length;
+  const attive = r=>r.stato==='Nuova'||r.stato==='Aggiorna importi';
   document.getElementById('ix-preview').innerHTML = _ixRighe.length ? `<div class="tbl-wrap"><table>
-    <thead><tr><th>Data</th><th>Nr.</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Importo</th><th>Stato</th></tr></thead>
-    <tbody>${_ixRighe.map(r=>r.errore?`<tr><td colspan="5">${r.file}: ${r.errore}</td><td>Errore</td></tr>`:`<tr style="${r.stato!=='Nuova'?'opacity:.5':''}">
+    <thead><tr><th>Data</th><th>Nr.</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Imponibile</th><th style="text-align:right">IVA</th><th style="text-align:right">Totale</th><th>Stato</th></tr></thead>
+    <tbody>${_ixRighe.map(r=>r.errore?`<tr><td colspan="7">${r.file}: ${r.errore}</td><td>Errore</td></tr>`:`<tr style="${!attive(r)?'opacity:.5':''}">
       <td style="white-space:nowrap">${fmtData(r.data)}</td><td>${r.nr}</td><td>${r.cliente}</td><td>${r.tipoDoc==='TD04'?'Nota di credito':r.tipoDoc}</td>
-      <td class="num">${fmt(r.importo)}</td><td>${r.stato}</td></tr>`).join('')}</tbody></table></div>` : '';
-  document.getElementById('ix-esito').innerHTML = _ixRighe.length ? `Da importare: <b>${nuove.length}</b> su ${_ixRighe.length} · totale ${fmt(tot)}${altroCed?` · <span style="color:var(--avere)">⚠ ${altroCed} fatture hanno un emittente diverso da ${soc}: controlla la società scelta</span>`:''}` : '';
-  document.getElementById('ix-btn').disabled = !nuove.length;
-  document.getElementById('ix-btn').textContent = nuove.length ? `Importa ${nuove.length} fatture` : 'Importa';
+      <td class="num">${fmt(r.imponibile)}</td><td class="num">${fmt(r.iva)}</td><td class="num">${fmt(r.importo)}</td><td>${r.stato}</td></tr>`).join('')}</tbody></table></div>` : '';
+  document.getElementById('ix-esito').innerHTML = _ixRighe.length ? `Nuove da importare: <b>${nuove.length}</b> (totale ${fmt(tot)}) · già inserite a mano, da aggiornare con imponibile e IVA esatti: <b>${agg.length}</b> · su ${_ixRighe.length} file${altroCed?` · <span style="color:var(--avere)">⚠ ${altroCed} fatture hanno un emittente diverso da ${soc}: controlla la società scelta</span>`:''}` : '';
+  document.getElementById('ix-btn').disabled = !(nuove.length||agg.length);
+  document.getElementById('ix-btn').textContent = (nuove.length||agg.length) ? [nuove.length?`Importa ${nuove.length} nuove`:'', agg.length?`aggiorna ${agg.length} esistenti`:''].filter(Boolean).join(' e ') : 'Importa';
 }
 async function eseguiImportXml(){
   const soc = document.getElementById('ix-soc').value;
   const nuove=_ixRighe.filter(r=>r.stato==='Nuova');
-  if(!nuove.length) return;
-  if(!confirm(`Registrare ${nuove.length} fatture per ${soc}${document.getElementById('ix-pdf').checked?' con copia di cortesia PDF':' (senza PDF)'}?`)) return;
+  const agg=_ixRighe.filter(r=>r.stato==='Aggiorna importi');
+  if(!nuove.length && !agg.length) return;
+  if(!confirm(`${nuove.length?`Registrare ${nuove.length} nuove fatture per ${soc}${document.getElementById('ix-pdf').checked?' con copia di cortesia PDF':' (senza PDF)'}`:''}${nuove.length&&agg.length?' e ':''}${agg.length?`aggiornare imponibile e IVA di ${agg.length} fatture già inserite (cliente, totale, PDF e MGR restano invariati)`:''}?`)) return;
   const btn=document.getElementById('ix-btn'); btn.disabled=true;
   const esito=document.getElementById('ix-esito');
   const conPdf = document.getElementById('ix-pdf').checked;
-  if(conPdf && !(window.jspdf&&window.jspdf.jsPDF)){ alert('Libreria PDF non caricata: ricarica la pagina o togli la spunta sul PDF.'); btn.disabled=false; return; }
-  let ok=0, err=0;
+  if(nuove.length && conPdf && !(window.jspdf&&window.jspdf.jsPDF)){ alert('Libreria PDF non caricata: ricarica la pagina o togli la spunta sul PDF.'); btn.disabled=false; return; }
+  let ok=0, err=0, okAgg=0;
   for(const r of nuove){
     try{
       const meta = {
@@ -4937,9 +4948,20 @@ async function eseguiImportXml(){
       ok++; esito.textContent=`Importate ${ok}/${nuove.length}...`;
     }catch(e){ err++; console.error('Import',r.nr,e.message); }
   }
-  esito.textContent = `Importate ${ok} fatture${err?`, ${err} con errore (riprova: quelle già importate verranno saltate)`:''}.`;
+  for(const r of agg){
+    try{
+      // aggiorna SOLO gli importi esatti (e i dati SdI): non tocca importo, cliente, PDF, MGR
+      await FA_REF().doc(r.docId).update({
+        imponibile:r.imponibile, iva:r.iva, tipoDoc:r.tipoDoc, nrSdI:r.nrOriginale,
+        pivaCliente:r.dettaglio?.cessionario?.piva?.replace(/^IT/,'')||'',
+        modificatoIl:new Date().toISOString(), modificatoDA:window._currentUser?.nome||''
+      });
+      okAgg++; esito.textContent=`Aggiornate ${okAgg}/${agg.length}...`;
+    }catch(e){ err++; console.error('Aggiornamento',r.nr,e.message); }
+  }
+  esito.textContent = `${ok?`Importate ${ok} fatture. `:''}${okAgg?`Aggiornate ${okAgg} fatture esistenti. `:''}${err?`${err} con errore (riprova: quelle già fatte verranno saltate)`:''}`;
   await caricaFattureAttive();
-  if(!err) setTimeout(()=>chiudiModal('modal-import-xml'),1200);
+  if(!err) setTimeout(()=>chiudiModal('modal-import-xml'),1500);
   else { rielaboraImportXml(); }
 }
 
