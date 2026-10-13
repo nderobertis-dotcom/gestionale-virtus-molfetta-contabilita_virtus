@@ -3538,7 +3538,7 @@ async function cambiaRuoloUtente(uid,ruolo){
       <input type="date" class="form-input" id="uf-data">
     </div>
     <div class="two-col">
-      <div class="form-row"><label class="form-label">Imponibile €</label>
+      <div class="form-row"><label class="form-label">Imponibile € <span style="font-weight:400;color:var(--text3)">(negativo per le note di credito)</span></label>
         <input type="number" step="0.01" class="form-input" id="uf-imponibile" placeholder="0" oninput="aggiornaTotaleFattura()">
       </div>
       <div class="form-row"><label class="form-label">Aliquota IVA %</label>
@@ -4657,7 +4657,9 @@ function mgrFattura(f){
 // Importo MGR = imponibile × MGR% (imponibile 100, MGR 25 -> 25)
 function importoMgr(f){
   const i = fatturaImporti(f), m = mgrFattura(f);
-  return Math.round(i.imp*m.mgr)/100;
+  // Nota di credito (TD04) o imponibile negativo: l'importo MGR è sempre negativo
+  const base = f.tipoDoc==='TD04' ? -Math.abs(i.imp) : i.imp;
+  return (Math.round(base*m.mgr)/100) || 0; // || 0 evita "-0" 
 }
 
 function buildFattureAttive(){
