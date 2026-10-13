@@ -397,6 +397,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <input type="text" id="fa-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildFattureAttive()">
         <button class="btn btn-dark perm-admin no-print" onclick="apriModalUploadFattura()">+ Carica Fattura PDF</button>
         <button class="btn perm-admin no-print" onclick="apriModalImportXml()">📥 Importa XML (SdI)</button>
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalContabilizza()">📒 Contabilizza in Prima Nota</button>
       </div>
       <div id="fa-container"></div>
     </div>
@@ -3569,6 +3570,25 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+<!-- MODAL CONTABILIZZA FATTURE -->
+<div class="modal-overlay" id="modal-contabilizza" onclick="if(event.target===this)chiudiModal('modal-contabilizza')">
+  <div class="modal" style="width:1180px;max-width:97vw">
+    <div class="modal-title">📒 Contabilizza fatture in Prima Nota</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">
+      Dare: cliente per il totale fattura. Avere: IVA a debito (Virtus 100% · Dinamo e Invicta 50%), 50% IVA a ricavo (solo Dinamo e Invicta, conto 5.1.2),
+      5.1.3 Ricavi da sponsorizzazioni per l'importo MGR (imponibile × MGR%) e, per la parte restante del ricavo, di nuovo il cliente. Le note di credito vengono registrate a storno (dare/avere invertiti).
+    </div>
+    <div id="ct-mappa" style="margin-bottom:.6rem"></div>
+    <div id="ct-preview" style="max-height:46vh;overflow:auto"></div>
+    <div id="ct-esito" style="font-size:12px;color:var(--text2);margin:.6rem 0"></div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <a href="#" id="ct-annulla" style="font-size:11px;color:var(--rosso)" onclick="annullaContabilizzazione();return false"></a>
+      <span><button class="btn" onclick="chiudiModal('modal-contabilizza')">Chiudi</button>
+      <button class="btn btn-dark" id="ct-btn" onclick="eseguiContabilizza()" disabled>Registra</button></span>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL IMPORT FATTURE XML -->
 <div class="modal-overlay" id="modal-import-xml" onclick="if(event.target===this)chiudiModal('modal-import-xml')">
   <div class="modal" style="width:820px;max-width:96vw">
@@ -4763,7 +4783,7 @@ function buildFattureAttive(){
     </tr></thead>
     <tbody>${lista.map(f=>`<tr>
       <td><span class="badge-soc badge-${f.soc?.[0]?.toLowerCase()}">${f.soc}</span></td>
-      <td style="font-weight:600">${f.nr||'—'}</td>
+      <td style="font-weight:600">${f.nr||'—'}${registrazioni.some(r=>r.fatturaId===f.id)?' <span title="Registrata in Prima Nota" style="font-weight:400">📒</span>':''}</td>
       <td style="white-space:nowrap">${fmtData(f.data)}</td>
       <td>${f.cliente||'—'}</td>
       ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f);
@@ -4775,6 +4795,234 @@ function buildFattureAttive(){
       ${isAdmin?`<td style="white-space:nowrap"><button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalModificaFattura('${f.id}')">✏️ Modifica</button> <button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
     </tr>`).join('')}
     </tbody></table></div>`;
+}
+
+// ── CONTABILIZZAZIONE FATTURE ATTIVE IN PRIMA NOTA ──
+const CT_MAP_KEY = 'ct_map_v1';
+let _ctRighe = [];
+function _ctContoDaTesto(t){
+  t = (t||'').trim(); if(!t) return null;
+  return pianoConti.find(c=>`${c.codice} — ${c.nome}`===t || c.codice===t || c.id===t) || null;
+}
+const _ctLab = c => c ? `${c.codice} — ${c.nome}` : '';
+function _ctMappaDefault(){
+  const cod = c=>pianoConti.find(x=>x.codice===c);
+  const ricavi = _ctLab(cod('5.1.3')) || '5.1.3 — Ricavi da sponsorizzazioni';
+  const dinIva = pianoConti.find(c=>c.soc==='DINAMO' && /iva/i.test(c.nome) && /debito/i.test(c.nome)) || cod('2.4.2') || cod('2.4.1');
+  return {
+    VIRTUS:  { ivaDeb:_ctLab(cod('2.4.1')), ivaRic:'', ricavi },
+    DINAMO:  { ivaDeb:_ctLab(dinIva), ivaRic:_ctLab(cod('5.1.2')), ricavi },
+    INVICTA: { ivaDeb:_ctLab(cod('2.4.2')||cod('2.4.1')), ivaRic:_ctLab(cod('5.1.2')), ricavi },
+    gruppo:  _ctLab(cod('1.2.1'))
+  };
+}
+function _ctMappa(){
+  const out = _ctMappaDefault(); let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(CT_MAP_KEY)||'null'); }catch(e){}
+  if(saved){
+    for(const k of ['VIRTUS','DINAMO','INVICTA']) for(const f of ['ivaDeb','ivaRic','ricavi'])
+      if(saved[k]?.[f] && (_ctContoDaTesto(saved[k][f]) || /^5\.1\.3\b/.test(saved[k][f]))) out[k][f] = saved[k][f];
+    if(saved.gruppo && _ctContoDaTesto(saved.gruppo)) out.gruppo = saved.gruppo;
+  }
+  return out;
+}
+function _ctLeggiMappa(){
+  const m = {};
+  for(const k of ['VIRTUS','DINAMO','INVICTA']){
+    m[k] = {};
+    for(const f of ['ivaDeb','ivaRic','ricavi']) m[k][f] = document.getElementById(`ct-${k}-${f}`)?.value.trim()||'';
+  }
+  m.gruppo = document.getElementById('ct-gruppo')?.value.trim()||'';
+  return m;
+}
+function _ctRisolvi(soc, ruolo, mappa){
+  const t = mappa[soc]?.[ruolo];
+  const c = _ctContoDaTesto(t);
+  if(c) return {id:c.id};
+  if(ruolo==='ricavi' && /^5\.1\.3\b/.test(t||'')) return {id:'5.1.3', daCreare:true};
+  return null;
+}
+// Conto cliente: cerca un conto di classe 1 (esclusa liquidità) con lo stesso nome; altrimenti va creato sotto il gruppo
+function _ctContoCliente(f){
+  const nomi = [f.cliente, sponsorPerFattura(f)?.nome].filter(Boolean).map(_normNome).filter(Boolean);
+  const pool = pianoConti.filter(c=>parseInt(c.classe||c.codice?.split('.')[0])===1 && !c.codice.startsWith('1.1')
+    && c.tipo!=='classe' && !pianoConti.some(x=>x.padre===c.id));
+  for(const n of nomi){
+    const c = pool.find(c=>{ const m=_normNome(c.nome); return m && (m===n || (Math.min(m.length,n.length)>=4 && (m.startsWith(n+' ')||n.startsWith(m+' ')))); });
+    if(c) return {id:c.id};
+  }
+  return null;
+}
+function _ctNuovoCodice(gruppoId, giaUsati){
+  const figli = pianoConti.filter(c=>c.padre===gruppoId);
+  let max = 0, width = 3;
+  figli.forEach(c=>{ const last=(c.codice||'').split('.').pop(); if(/^\d+$/.test(last)){ max=Math.max(max,parseInt(last,10)); width=Math.max(width,last.length); } });
+  let n = max+1, code;
+  do{ code = `${gruppoId}.${String(n).padStart(width,'0')}`; n++; }while(pianoConti.some(c=>c.codice===code) || giaUsati.has(code));
+  return code;
+}
+// Calcolo scrittura in centesimi (quadra sempre: IVA a debito + IVA a ricavo + MGR + resto = totale)
+function _ctCalcola(f){
+  const i = fatturaImporti(f), mgr = mgrFattura(f).mgr;
+  const neg = f.tipoDoc==='TD04' || i.tot<0;
+  const c = x=>Math.round(Math.abs(x)*100);
+  const imp = c(i.imp), iva = c(i.iva), tot = imp+iva;
+  const ivaDeb = Math.round(iva*(IVA_DEBITO_PCT[f.soc]??100)/100), ivaRic = iva-ivaDeb;
+  const mgrBase = Math.round(imp*mgr/100), resto = imp-mgrBase;
+  return {neg, tot, ivaDeb, ivaRic, mgrBase, resto, mgr};
+}
+function _ctPossibileDoppione(f, contoCliente){
+  const nr = nrNormalizzato(f.nr);
+  const re = new RegExp('(^|[^\\d])'+nr.replace(/[.*+?^${}()|[\]\\\/]/g,'\\$&')+'([^\\d]|$)');
+  const totC = Math.round(Math.abs(fatturaImporti(f).tot)*100);
+  return registrazioni.some(r=>r.soc===f.soc && !r.fatturaId && (
+    re.test(`${r.desc||''} ${r.rif||''} ${r.note||''}`) ||
+    (r.data===f.data && (r.righe||[]).some(g=>Math.round((g.dare||0)*100)===totC && contoCliente && g.contoId===contoCliente))
+  ));
+}
+function apriModalContabilizza(){
+  const m = _ctMappa();
+  const inp = (k,f,ph)=>`<input type="text" class="form-input" list="pdc-datalist" id="ct-${k}-${f}" value="${(m[k][f]||'').replace(/"/g,'&quot;')}" placeholder="${ph||''}" style="font-size:11px;padding:3px 6px" onchange="ctRicalcola()">`;
+  document.getElementById('ct-mappa').innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>Società</th><th>IVA a debito</th><th>IVA a ricavo (50%)</th><th>Ricavi sponsorizzazioni (MGR)</th></tr></thead>
+    <tbody>${['VIRTUS','DINAMO','INVICTA'].map(k=>`<tr><td><b>${k}</b></td><td>${inp(k,'ivaDeb')}</td><td>${k==='VIRTUS'?'<span style="color:var(--text3);font-size:11px">non previsto (IVA 100% a debito)</span>':inp(k,'ivaRic')}</td><td>${inp(k,'ricavi')}</td></tr>`).join('')}
+    <tr><td><b>Conti clienti</b></td><td colspan="3"><input type="text" class="form-input" list="pdc-datalist" id="ct-gruppo" value="${(m.gruppo||'').replace(/"/g,'&quot;')}" style="font-size:11px;padding:3px 6px" onchange="ctRicalcola()"> <span style="font-size:10px;color:var(--text3)">gruppo sotto cui creare i sottoconti dei clienti mancanti</span></td></tr></tbody></table></div>`;
+  document.getElementById('ct-esito').textContent = '';
+  _ctRighe = fattureAttive.map(f=>({f, sel:null}));
+  ctRicalcola(true);
+  apriModal('modal-contabilizza');
+}
+function ctRicalcola(primo){
+  const mappa = _ctLeggiMappa();
+  try{ localStorage.setItem(CT_MAP_KEY, JSON.stringify(mappa)); }catch(e){}
+  const gruppo = _ctContoDaTesto(mappa.gruppo);
+  const nuoviClienti = new Map(); // chiave nome normalizzato -> nome
+  _ctRighe.forEach(r=>{
+    const f = r.f; r.errori = []; r.righeScrittura = null;
+    const iv = fatturaImporti(f);
+    r.cc = _ctContoCliente(f);
+    const chiaveNuovo = _normNome(f.cliente)||(f.cliente||'');
+    if(!r.cc){ if(!gruppo) r.errori.push('gruppo conti clienti non valido'); else nuoviClienti.set(chiaveNuovo, f.cliente); }
+    r.calc = _ctCalcola(f);
+    r.cDeb = _ctRisolvi(f.soc,'ivaDeb',mappa);
+    if(!r.cDeb && r.calc.ivaDeb) r.errori.push('conto IVA a debito non valido');
+    r.cRic = f.soc==='VIRTUS' ? null : _ctRisolvi(f.soc,'ivaRic',mappa);
+    if(f.soc!=='VIRTUS' && !r.cRic && r.calc.ivaRic) r.errori.push('conto IVA a ricavo non valido');
+    r.cRav = _ctRisolvi(f.soc,'ricavi',mappa);
+    if(!r.cRav && r.calc.mgrBase) r.errori.push('conto ricavi non valido');
+    if(!IVA_DEBITO_PCT[f.soc]) r.errori.push('società non riconosciuta');
+    r.chiaveNuovo = chiaveNuovo;
+    r.stimato = iv.stimato;
+    if(registrazioni.some(g=>g.fatturaId===f.id)){ r.stato='Già registrata'; r.sel=false; r.bloccata=true; return; }
+    r.bloccata = r.errori.length>0;
+    if(r.bloccata){ r.stato='Errore: '+r.errori.join(', '); r.sel=false; return; }
+    if(_ctPossibileDoppione(f, r.cc?.id)){ r.stato='Possibile doppione (già in Prima Nota?)'; if(r.sel===null||primo) r.sel=false; return; }
+    if(r.stimato){ r.stato='Importi stimati (aggiorna da XML)'; if(r.sel===null||primo) r.sel=false; return; }
+    r.stato='Da registrare'; if(r.sel===null||primo) r.sel=true;
+  });
+  _ctRighe.sort((a,b)=>(a.f.soc||'').localeCompare(b.f.soc||'')||(a.f.data||'').localeCompare(b.f.data||'')||(a.f.nr||'').localeCompare(b.f.nr||'','it',{numeric:true}));
+  ctRender(nuoviClienti);
+}
+function ctToggle(i, v){ _ctRighe[i].sel = v; ctRender(); }
+function ctToggleTutte(v){ _ctRighe.forEach(r=>{ if(!r.bloccata) r.sel = v; }); ctRender(); }
+function ctRender(nuoviClienti){
+  const e = x=>fmt(x/100);
+  const lab = (c,r)=>c?(c.daCreare?c.id+'*':c.id):'?';
+  const sel = _ctRighe.filter(r=>r.sel);
+  const selNuovi = new Set(sel.filter(r=>!r.cc).map(r=>r.chiaveNuovo));
+  document.getElementById('ct-preview').innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th><input type="checkbox" onchange="ctToggleTutte(this.checked)" title="Seleziona/deseleziona tutte"></th><th>Soc.</th><th>Nr.</th><th>Data</th><th>Cliente</th><th style="text-align:right">Totale</th><th>Scrittura (D = dare · A = avere)</th><th>Stato</th></tr></thead>
+    <tbody>${_ctRighe.map((r,i)=>{
+      const f=r.f, c=r.calc, cli = r.cc?r.cc.id:'<i>nuovo conto</i>';
+      const D = c.neg?'A':'D', A = c.neg?'D':'A';
+      const rr = [];
+      rr.push(`${D} ${cli} ${e(c.tot)}`);
+      if(c.ivaDeb) rr.push(`${A} ${lab(r.cDeb)} ${e(c.ivaDeb)}`);
+      if(c.ivaRic) rr.push(`${A} ${lab(r.cRic)} ${e(c.ivaRic)}`);
+      if(c.mgrBase) rr.push(`${A} ${lab(r.cRav)} ${e(c.mgrBase)} (MGR ${c.mgr}%)`);
+      if(c.resto) rr.push(`${A} ${cli} ${e(c.resto)}`);
+      return `<tr style="${r.bloccata?'opacity:.5':''}"><td><input type="checkbox" ${r.sel?'checked':''} ${r.bloccata?'disabled':''} onchange="ctToggle(${i},this.checked)"></td>
+      <td>${f.soc}</td><td style="font-weight:600">${f.nr||'—'}${c.neg?' <span style="font-weight:400;color:var(--rosso)">(NC)</span>':''}</td><td style="white-space:nowrap">${fmtData(f.data)}</td><td>${f.cliente||'—'}</td>
+      <td class="num">${fmt(fatturaImporti(f).tot)}</td><td style="font-size:10.5px;line-height:1.35">${rr.join('<br>')}</td><td style="font-size:11px">${r.stato}</td></tr>`;}).join('')}
+    </tbody></table></div>`;
+  const senzaMgr = sel.filter(r=>!r.calc.mgr).length;
+  const nStorni = sel.filter(r=>r.calc.neg).length;
+  document.getElementById('ct-esito').innerHTML = `Selezionate <b>${sel.length}</b> su ${_ctRighe.length} · totale ${e(sel.reduce((a,r)=>a+r.calc.tot,0))} · nuovi sottoconti clienti da creare: <b>${selNuovi.size}</b>${nStorni?` · note di credito (storno): ${nStorni}`:''}${senzaMgr?` · <span style="color:var(--avere)">⚠ ${senzaMgr} con MGR 0%: tutto il ricavo resta al cliente (nessuna riga su 5.1.3)</span>`:''}${_ctRighe.some(r=>r.sel&&r.cRav?.daCreare)?' · il conto 5.1.3 non esiste: verrà creato sotto 5.1':''}`;
+  document.getElementById('ct-btn').disabled = !sel.length;
+  document.getElementById('ct-btn').textContent = sel.length ? `Registra ${sel.length} scritture` : 'Registra';
+  const nGen = registrazioni.filter(g=>g.origine==='fatture-attive').length;
+  const an = document.getElementById('ct-annulla');
+  an.textContent = nGen ? `Elimina le ${nGen} registrazioni generate da Fatture Attive` : '';
+}
+async function eseguiContabilizza(){
+  const sel = _ctRighe.filter(r=>r.sel && !r.bloccata);
+  if(!sel.length) return;
+  const mappa = _ctLeggiMappa();
+  const gruppo = _ctContoDaTesto(mappa.gruppo);
+  if(!confirm(`Creare ${sel.length} registrazioni in Prima Nota? Potrai eliminarle in blocco dal pulsante in basso a sinistra di questa finestra.`)) return;
+  try{
+    // 1) conto 5.1.3 se manca
+    if(sel.some(r=>r.cRav?.daCreare) && !pianoConti.find(c=>c.codice==='5.1.3')){
+      pianoConti.push({id:'5.1.3', codice:'5.1.3', nome:'Ricavi da sponsorizzazioni', classe:5, tipo:'conto', padre:'5.1', note:'Creato da Fatture Attive'});
+    }
+    // 2) sottoconti clienti mancanti (uno per cliente, anche se ha più fatture)
+    const creati = new Map(), usati = new Set();
+    const tipoFiglio = pianoConti.find(c=>c.padre===gruppo?.id)?.tipo || 'conto';
+    for(const r of sel){
+      if(r.cc) continue;
+      if(!creati.has(r.chiaveNuovo)){
+        const code = _ctNuovoCodice(gruppo.id, usati); usati.add(code);
+        pianoConti.push({id:code, codice:code, nome:(r.f.cliente||'').trim(), classe:1, tipo:tipoFiglio, padre:gruppo.id, note:'Creato da Fatture Attive'});
+        creati.set(r.chiaveNuovo, code);
+      }
+    }
+    // 3) registrazioni
+    let n = 0;
+    for(const r of sel){
+      const f = r.f, c = r.calc;
+      const cli = r.cc ? r.cc.id : creati.get(r.chiaveNuovo);
+      const D = c.neg?'avere':'dare', A = c.neg?'dare':'avere';
+      const riga = (lato, contoId, cent)=>({ tipo:lato, contoId, dare:lato==='dare'?cent/100:0, avere:lato==='avere'?cent/100:0 });
+      const righe = [ riga(D, cli, c.tot) ];
+      if(c.ivaDeb) righe.push(riga(A, r.cDeb.id, c.ivaDeb));
+      if(c.ivaRic) righe.push(riga(A, r.cRic.id, c.ivaRic));
+      if(c.mgrBase) righe.push(riga(A, r.cRav.id, c.mgrBase));
+      if(c.resto) righe.push(riga(A, cli, c.resto));
+      const td = righe.reduce((a,x)=>a+Math.round(x.dare*100),0), ta = righe.reduce((a,x)=>a+Math.round(x.avere*100),0);
+      if(td!==ta) throw new Error(`Scrittura non in equilibrio per la fattura ${f.nr}`);
+      registrazioni.push({
+        id: genId(), data: f.data, soc: f.soc,
+        desc: `${c.neg?'Nota di credito':'Fattura'} ${f.nr} — ${f.cliente}`,
+        rif: `Fatt. ${f.nr}`, note: 'Generata da Fatture Attive', scadenza: null,
+        righe, creatoIl: new Date().toISOString(), origine: 'fatture-attive', fatturaId: f.id
+      });
+      n++;
+    }
+    pianoConti.sort((a,b)=>a.codice?.localeCompare(b.codice));
+    aggiornaDatalist();
+    if(document.getElementById('page-primanota')?.classList.contains('active')) renderPrimaNota();
+    await (window.salvaEAggiorna && window.salvaEAggiorna());
+    document.getElementById('ct-esito').innerHTML = `✅ Registrate <b>${n}</b> scritture${creati.size?` e creati ${creati.size} sottoconti clienti`:''}.`;
+    _ctRighe.forEach(r=>{ if(r.sel) r.sel=false; });
+    ctRicalcola();
+    buildFattureAttive();
+  }catch(e){
+    alert('Errore: '+e.message+'\nControlla la Prima Nota prima di riprovare: alcune scritture potrebbero essere già state aggiunte in memoria.');
+    ctRicalcola();
+  }
+}
+async function annullaContabilizzazione(){
+  const gen = registrazioni.filter(g=>g.origine==='fatture-attive');
+  if(!gen.length) return;
+  if(!confirm(`Eliminare ${gen.length} registrazioni generate da Fatture Attive? Eventuali modifiche fatte a mano su di esse andranno perse. I sottoconti clienti creati restano nel piano dei conti.`)) return;
+  const ids = new Set(gen.map(g=>g.id));
+  registrazioni = registrazioni.filter(g=>!ids.has(g.id));
+  scadenzario = scadenzario.filter(x=>!ids.has(x.regId));
+  pianiRateazione = pianiRateazione.filter(x=>!ids.has(x.regId));
+  if(document.getElementById('page-primanota')?.classList.contains('active')) renderPrimaNota();
+  await (window.salvaEAggiorna && window.salvaEAggiorna());
+  ctRicalcola(true);
+  buildFattureAttive();
 }
 
 // ── IMPORT FATTURE DA XML (FatturaPA / SdI) ──
