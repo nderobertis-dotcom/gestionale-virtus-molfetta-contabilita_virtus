@@ -380,6 +380,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         </div>
       </div>
       <div class="metrics" id="fa-metrics"></div>
+      <div id="fa-clienti" style="margin-bottom:1rem"></div>
       <div class="toolbar no-print">
         <select id="fa-filter-soc" class="form-input" style="width:auto" onchange="buildFattureAttive()">
           <option value="">Tutte le società</option>
@@ -3510,7 +3511,8 @@ async function cambiaRuoloUtente(uid,ruolo){
 <!-- MODAL UPLOAD FATTURA PDF -->
 <div class="modal-overlay" id="modal-upload-fattura" onclick="if(event.target===this)chiudiModal('modal-upload-fattura')">
   <div class="modal" style="width:500px">
-    <div class="modal-title">🧾 Carica Fattura PDF</div>
+    <div class="modal-title" id="uf-title">🧾 Carica Fattura PDF</div>
+    <input type="hidden" id="uf-id">
     <div class="two-col">
       <div class="form-row"><label class="form-label">Società</label>
         <select class="form-input" id="uf-soc">
@@ -3535,8 +3537,8 @@ async function cambiaRuoloUtente(uid,ruolo){
     <div class="form-row"><label class="form-label">Importo € (opzionale)</label>
       <input type="number" class="form-input" id="uf-importo" placeholder="0">
     </div>
-    <div class="form-row"><label class="form-label">File PDF</label>
-      <input type="file" class="form-input" id="uf-file" accept=".pdf" onchange="anteprima PDF upload('uf-file','uf-preview')">
+    <div class="form-row"><label class="form-label" id="uf-file-label">File PDF</label>
+      <input type="file" class="form-input" id="uf-file" accept=".pdf" onchange="const f=this.files[0];document.getElementById('uf-preview').textContent=f?f.name+' ('+(f.size/1024).toFixed(0)+' KB)':''">
       <div id="uf-preview" style="margin-top:.4rem;font-size:11px;color:var(--text2)"></div>
     </div>
     <div id="uf-progress" style="display:none;margin:.5rem 0">
@@ -3547,7 +3549,7 @@ async function cambiaRuoloUtente(uid,ruolo){
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="chiudiModal('modal-upload-fattura')">Annulla</button>
-      <button class="btn btn-dark" onclick="salvaFatturaPDF()">Carica</button>
+      <button class="btn btn-dark" id="uf-btn" onclick="salvaFatturaPDF()">Carica</button>
     </div>
   </div>
 </div>
@@ -4601,6 +4603,24 @@ function buildFattureAttive(){
     <div class="metric"><div class="metric-label">Dinamo</div><div class="metric-value">${fmt(_soc('DINAMO'))}</div></div>
     <div class="metric"><div class="metric-label">Invicta</div><div class="metric-value">${fmt(_soc('INVICTA'))}</div></div>`;
 
+  // Card per cliente (stessi filtri; clic = filtra su quel cliente)
+  const _cl = {};
+  lista.forEach(f=>{
+    const k = (f.cliente||'—').trim().toUpperCase();
+    (_cl[k] = _cl[k]||{nome:(f.cliente||'—').trim(),tot:0,n:0});
+    _cl[k].tot += parseFloat(f.importo)||0; _cl[k].n++;
+  });
+  const _clArr = Object.values(_cl).sort((a,b)=>b.tot-a.tot||a.nome.localeCompare(b.nome));
+  const _cc = document.getElementById('fa-clienti');
+  if(_cc) _cc.innerHTML = _clArr.length ? `
+    <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Per cliente (${_clArr.length}) ${search?`· <a href="#" onclick="document.getElementById('fa-search').value='';buildFattureAttive();return false">rimuovi filtro</a>`:''}</div>
+    <div class="metrics" style="margin-bottom:0">${_clArr.map(c=>`
+      <div class="metric" style="cursor:pointer${search&&c.nome.toLowerCase()===search?';border-color:var(--text1)':''}" onclick="document.getElementById('fa-search').value=${JSON.stringify(c.nome).replace(/"/g,'&quot;')};buildFattureAttive()">
+        <div class="metric-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c.nome.replace(/"/g,'&quot;')}">${c.nome}</div>
+        <div class="metric-value" style="font-size:16px">${fmt(c.tot)}</div>
+        <div style="font-size:10px;color:var(--text3)">${c.n} ${c.n===1?'fattura':'fatture'}</div>
+      </div>`).join('')}</div>` : '';
+
   const cont = document.getElementById('fa-container');
   if(!cont) return;
 
@@ -4623,12 +4643,17 @@ function buildFattureAttive(){
       <td class="num">${f.importo?fmt(f.importo):'—'}</td>
       <td>${f.anno||'—'}</td>
       <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button></td>
-      ${isAdmin?`<td><button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
+      ${isAdmin?`<td style="white-space:nowrap"><button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalModificaFattura('${f.id}')">✏️ Modifica</button> <button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
     </tr>`).join('')}
     </tbody></table></div>`;
 }
 
 function apriModalUploadFattura(){
+  document.getElementById('uf-id').value = '';
+  document.getElementById('uf-title').textContent = '🧾 Carica Fattura PDF';
+  document.getElementById('uf-btn').textContent = 'Carica';
+  document.getElementById('uf-file-label').textContent = 'File PDF';
+  document.getElementById('uf-file').value = '';
   document.getElementById('uf-data').value = new Date().toISOString().slice(0,10);
   document.getElementById('uf-nr').value = '';
   document.getElementById('uf-cliente').value = '';
@@ -4638,9 +4663,31 @@ function apriModalUploadFattura(){
   apriModal('modal-upload-fattura');
 }
 
+function apriModalModificaFattura(id){
+  const f = fattureAttive.find(x=>x.id===id);
+  if(!f) return;
+  const anno = document.getElementById('uf-anno');
+  if(f.anno && ![...anno.options].some(o=>o.value===f.anno)) anno.add(new Option(f.anno,f.anno));
+  document.getElementById('uf-id').value = id;
+  document.getElementById('uf-title').textContent = '✏️ Modifica Fattura';
+  document.getElementById('uf-btn').textContent = 'Salva modifiche';
+  document.getElementById('uf-file-label').textContent = 'Sostituisci PDF (vuoto = mantieni quello attuale: '+(f.nomeFile||'—')+')';
+  document.getElementById('uf-soc').value = f.soc||'VIRTUS';
+  document.getElementById('uf-anno').value = f.anno||'';
+  document.getElementById('uf-nr').value = f.nr||'';
+  document.getElementById('uf-cliente').value = f.cliente||'';
+  document.getElementById('uf-data').value = f.data||'';
+  document.getElementById('uf-importo').value = f.importo||'';
+  document.getElementById('uf-file').value = '';
+  document.getElementById('uf-preview').textContent = '';
+  document.getElementById('uf-progress').style.display = 'none';
+  apriModal('modal-upload-fattura');
+}
+
 async function salvaFatturaPDF(){
+  const editId = document.getElementById('uf-id').value;
   const file = document.getElementById('uf-file').files[0];
-  if(!file){ alert('Seleziona un file PDF.'); return; }
+  if(!file && !editId){ alert('Seleziona un file PDF.'); return; }
   // Nessun limite fisso — usa chunk per file grandi
 
   const soc      = document.getElementById('uf-soc').value;
@@ -4651,6 +4698,38 @@ async function salvaFatturaPDF(){
   const anno     = document.getElementById('uf-anno').value;
 
   if(!nr||!cliente){ alert('Inserisci numero fattura e cliente.'); return; }
+
+  if(editId){
+    const old = fattureAttive.find(x=>x.id===editId);
+    const prog = document.getElementById('uf-progress');
+    const bar  = document.getElementById('uf-progress-bar');
+    const txt  = document.getElementById('uf-progress-txt');
+    prog.style.display = 'block'; bar.style.width = '40%'; txt.textContent = 'Salvataggio...';
+    try{
+      const ref = FA_REF().doc(editId);
+      const upd = { soc, nr, cliente, data, importo, anno, modificatoIl:new Date().toISOString(), modificatoDA:window._currentUser?.nome||'' };
+      if(file){
+        const b64 = await fileToBase64(file);
+        const nChunk = Math.ceil(b64.length / CHUNK_SIZE);
+        if(nChunk>1){
+          for(let i=0;i<nChunk;i++) await ref.collection('chunks').doc('chunk_'+i).set({data:b64.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), idx:i});
+        }
+        Object.assign(upd,{ nomeFile:file.name, nChunk, usaChunk:nChunk>1,
+          b64: nChunk>1 ? firebase.firestore.FieldValue.delete() : b64 });
+        await ref.update(upd);
+        const oldN = old?.usaChunk ? (old.nChunk||0) : 0;
+        for(let i=(nChunk>1?nChunk:0); i<oldN; i++) await ref.collection('chunks').doc('chunk_'+i).delete();
+      } else {
+        await ref.update(upd);
+      }
+      bar.style.width = '100%'; txt.textContent = 'Salvato!';
+      setTimeout(()=>{ chiudiModal('modal-upload-fattura'); caricaFattureAttive(); }, 500);
+    }catch(e){
+      alert('Errore: '+e.message);
+      prog.style.display = 'none';
+    }
+    return;
+  }
 
   // Progress
   const prog = document.getElementById('uf-progress');
@@ -5182,6 +5261,10 @@ async function apriPDF(id, tipo){
 async function eliminaDoc(id, tipo){
   if(!confirm('Eliminare questo documento?')) return;
   const ref = tipo==='fattura' ? FA_REF().doc(id) : CON_REF().doc(id);
+  try{
+    const d = (tipo==='fattura' ? fattureAttive : contrattiDoc).find(x=>x.id===id);
+    if(d?.usaChunk) for(let i=0;i<(d.nChunk||0);i++) await ref.collection('chunks').doc('chunk_'+i).delete();
+  }catch(e){ console.warn('Pulizia chunk:',e.message); }
   await ref.delete();
   if(tipo==='fattura') caricaFattureAttive();
   else caricaContrattiDoc();
