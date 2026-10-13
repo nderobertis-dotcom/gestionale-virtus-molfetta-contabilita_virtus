@@ -4649,9 +4649,10 @@ function mgrFattura(f){
   const ha = sp && sp.mgr!==undefined && sp.mgr!==null && sp.mgr!=='';
   return {mgr: ha?Number(sp.mgr):0, sponsor:sp, nd:!ha};
 }
-function nettoMgr(f){
+// Importo MGR = imponibile × MGR% (imponibile 100, MGR 25 -> 25)
+function importoMgr(f){
   const i = fatturaImporti(f), m = mgrFattura(f);
-  return Math.round(i.imp*(1-m.mgr/100)*100)/100;
+  return Math.round(i.imp*m.mgr)/100;
 }
 
 function buildFattureAttive(){
@@ -4678,7 +4679,7 @@ function buildFattureAttive(){
   const _I = lista.map(f=>({f, i:fatturaImporti(f)}));
   const _sum = (arr,fn)=>arr.reduce((a,x)=>a+fn(x),0);
   const _totImp = _sum(_I,x=>x.i.imp), _totIva = _sum(_I,x=>x.i.iva), _totTot = _sum(_I,x=>x.i.tot);
-  const _totNetto = _sum(lista,f=>nettoMgr(f));
+  const _totNetto = _sum(lista,f=>importoMgr(f));
   const _soc = k=>_sum(_I.filter(x=>x.f.soc===k),x=>x.i.tot);
   const _stim = _I.filter(x=>x.i.stimato).length;
   const _m = document.getElementById('fa-metrics');
@@ -4687,7 +4688,7 @@ function buildFattureAttive(){
     <div class="metric"><div class="metric-label">Imponibile</div><div class="metric-value">${fmt(_totImp)}</div></div>
     <div class="metric"><div class="metric-label">IVA</div><div class="metric-value">${fmt(_totIva)}</div></div>
     <div class="metric"><div class="metric-label">Totale fatturato</div><div class="metric-value">${fmt(_totTot)}</div></div>
-    <div class="metric"><div class="metric-label">Imponibile netto MGR</div><div class="metric-value">${fmt(_totNetto)}</div></div>
+    <div class="metric"><div class="metric-label">Importo MGR</div><div class="metric-value">${fmt(_totNetto)}</div></div>
     <div class="metric"><div class="metric-label">Virtus (totale)</div><div class="metric-value">${fmt(_soc('VIRTUS'))}</div></div>
     <div class="metric"><div class="metric-label">Dinamo (totale)</div><div class="metric-value">${fmt(_soc('DINAMO'))}</div></div>
     <div class="metric"><div class="metric-label">Invicta (totale)</div><div class="metric-value">${fmt(_soc('INVICTA'))}</div></div>`;
@@ -4700,18 +4701,20 @@ function buildFattureAttive(){
   const _cl = {};
   lista.forEach(f=>{
     const k = _normNome(f.cliente) || (f.cliente||'—').trim().toUpperCase();
-    (_cl[k] = _cl[k]||{nome:(f.cliente||'—').trim(),tot:0,n:0});
-    _cl[k].tot += fatturaImporti(f).tot; _cl[k].net = (_cl[k].net||0)+nettoMgr(f); _cl[k].n++;
+    (_cl[k] = _cl[k]||{nome:(f.cliente||'—').trim(),imp:0,mgr:0});
+    _cl[k].imp += fatturaImporti(f).imp; _cl[k].mgr += importoMgr(f);
   });
-  const _clArr = Object.values(_cl).sort((a,b)=>b.tot-a.tot||a.nome.localeCompare(b.nome));
+  const _clArr = Object.values(_cl).sort((a,b)=>b.imp-a.imp||a.nome.localeCompare(b.nome));
   const _cc = document.getElementById('fa-clienti');
   if(_cc) _cc.innerHTML = _clArr.length ? `
     <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Per cliente (${_clArr.length}) ${search?`· <a href="#" onclick="document.getElementById('fa-search').value='';buildFattureAttive();return false">rimuovi filtro</a>`:''}</div>
     <div class="metrics" style="margin-bottom:0">${_clArr.map(c=>`
       <div class="metric" style="cursor:pointer${search&&c.nome.toLowerCase()===search?';border-color:var(--text1)':''}" onclick="document.getElementById('fa-search').value=${JSON.stringify(c.nome).replace(/"/g,'&quot;')};buildFattureAttive()">
         <div class="metric-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c.nome.replace(/"/g,'&quot;')}">${c.nome}</div>
-        <div class="metric-value" style="font-size:16px">${fmt(c.tot)}</div>
-        <div style="font-size:10px;color:var(--text3)">${c.n} ${c.n===1?'fattura':'fatture'} · netto MGR ${fmt(c.net)}</div>
+        <div class="metric-value" style="font-size:16px">${fmt(c.imp)}</div>
+        <div style="font-size:10px;color:var(--text3)">imponibile</div>
+        <div style="font-size:13px;font-weight:700;margin-top:.2rem">${fmt(c.mgr)}</div>
+        <div style="font-size:10px;color:var(--text3)">MGR</div>
       </div>`).join('')}</div>` : '';
 
   const cont = document.getElementById('fa-container');
@@ -4726,7 +4729,7 @@ function buildFattureAttive(){
     <thead><tr>
       <th>Soc.</th><th>Nr. Fattura</th><th>Data</th><th>Cliente</th>
       <th style="text-align:right">Imponibile</th><th style="text-align:right">IVA</th><th style="text-align:right">Totale</th>
-      <th style="text-align:right">MGR</th><th style="text-align:right">Imp. netto MGR</th><th>Anno</th><th>PDF</th>
+      <th style="text-align:right">MGR</th><th style="text-align:right">Importo MGR</th><th>Anno</th><th>PDF</th>
       ${isAdmin?'<th></th>':''}
     </tr></thead>
     <tbody>${lista.map(f=>`<tr>
@@ -4737,7 +4740,7 @@ function buildFattureAttive(){
       ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f), st=i.stimato?' title="Stimato: importo inserito a mano considerato totale con IVA 22%. Modifica la fattura per indicare imponibile e IVA esatti" style="color:var(--text3)"':'';
         return `<td class="num"${st}>${i.stimato?'~':''}${fmt(i.imp)}</td><td class="num"${st}>${i.stimato?'~':''}${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
         <td class="num" style="${m.sponsor&&!m.nd?'':'color:var(--text3)'}" title="${m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
-        <td class="num">${fmt(nettoMgr(f))}</td>`; })()}
+        <td class="num">${fmt(importoMgr(f))}</td>`; })()}
       <td>${f.anno||'—'}</td>
       <td>${f.senzaPdf?'<span style="font-size:10px;color:var(--text3)" title="Importata da XML: nessun PDF allegato. Usa Modifica per allegarlo">— no PDF</span>':`<button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button>${f.pdfDaXml?'<div style="font-size:9px;color:var(--text3)">copia di cortesia</div>':''}`}</td>
       ${isAdmin?`<td style="white-space:nowrap"><button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalModificaFattura('${f.id}')">✏️ Modifica</button> <button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
