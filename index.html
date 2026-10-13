@@ -4654,12 +4654,17 @@ function mgrFattura(f){
   const ha = sp && sp.mgr!==undefined && sp.mgr!==null && sp.mgr!=='';
   return {mgr: ha?Number(sp.mgr):0, sponsor:sp, nd:!ha};
 }
-// Importo MGR = imponibile × MGR% (imponibile 100, MGR 25 -> 25)
+// IVA a debito: VIRTUS 100%; DINAMO e INVICTA 50% (l'altro 50% dell'IVA va ad aumentare l'importo MGR)
+const IVA_DEBITO_PCT = {VIRTUS:100, DINAMO:50, INVICTA:50};
+function _ivaFirmata(f){ const i=fatturaImporti(f); return f.tipoDoc==='TD04' ? -Math.abs(i.iva) : i.iva; }
+function ivaDebito(f){ const p = IVA_DEBITO_PCT[f.soc] ?? 100; return (Math.round(_ivaFirmata(f)*p)/100) || 0; }
+function quotaIvaMgr(f){ return (Math.round((_ivaFirmata(f)-ivaDebito(f))*100)/100) || 0; }
+// Importo MGR = imponibile × MGR% + quota IVA non a debito (imponibile 100, MGR 25 -> 25; Dinamo/Invicta: + 50% dell'IVA)
 function importoMgr(f){
   const i = fatturaImporti(f), m = mgrFattura(f);
   // Nota di credito (TD04) o imponibile negativo: l'importo MGR è sempre negativo
   const base = f.tipoDoc==='TD04' ? -Math.abs(i.imp) : i.imp;
-  return (Math.round(base*m.mgr)/100) || 0; // || 0 evita "-0" 
+  return (Math.round((base*m.mgr/100 + quotaIvaMgr(f))*100)/100) || 0; // || 0 evita "-0" 
 }
 
 function buildFattureAttive(){
@@ -4687,12 +4692,14 @@ function buildFattureAttive(){
   const _sum = (arr,fn)=>arr.reduce((a,x)=>a+fn(x),0);
   const _totImp = _sum(_I,x=>x.i.imp), _totIva = _sum(_I,x=>x.i.iva), _totTot = _sum(_I,x=>x.i.tot);
   const _totNetto = _sum(lista,f=>importoMgr(f));
+  const _totIvaDeb = _sum(lista,f=>ivaDebito(f));
   const _soc = k=>_sum(_I.filter(x=>x.f.soc===k),x=>x.i.tot);
   const _m = document.getElementById('fa-metrics');
   if(_m) _m.innerHTML = `
     <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div></div>
     <div class="metric"><div class="metric-label">Imponibile</div><div class="metric-value">${fmt(_totImp)}</div></div>
     <div class="metric"><div class="metric-label">IVA</div><div class="metric-value">${fmt(_totIva)}</div></div>
+    <div class="metric"><div class="metric-label">IVA a debito</div><div class="metric-value">${fmt(_totIvaDeb)}</div></div>
     <div class="metric"><div class="metric-label">Totale fatturato</div><div class="metric-value">${fmt(_totTot)}</div></div>
     <div class="metric"><div class="metric-label">Importo MGR</div><div class="metric-value">${fmt(_totNetto)}</div>
       <div style="font-size:13px;font-weight:700;color:var(--rosso);margin-top:.2rem" title="Importo MGR ÷ totale imponibile">${_totImp?(_totNetto/_totImp*100).toFixed(2).replace('.',',')+'%':'—'} <span style="font-weight:400;font-size:10px">del totale imponibile</span></div></div>
@@ -4735,7 +4742,7 @@ function buildFattureAttive(){
   cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
     <thead><tr>
       <th>Soc.</th><th>Nr. Fattura</th><th>Data</th><th>Cliente</th>
-      <th style="text-align:right">Imponibile</th><th style="text-align:right">IVA</th><th style="text-align:right">Totale</th>
+      <th style="text-align:right">Imponibile</th><th style="text-align:right">IVA</th><th style="text-align:right">IVA a debito</th><th style="text-align:right">Totale</th>
       <th style="text-align:right">MGR</th><th style="text-align:right">Importo MGR</th><th>Anno</th><th>PDF</th>
       ${isAdmin?'<th></th>':''}
     </tr></thead>
@@ -4745,9 +4752,9 @@ function buildFattureAttive(){
       <td style="white-space:nowrap">${fmtData(f.data)}</td>
       <td>${f.cliente||'—'}</td>
       ${(()=>{ const i=fatturaImporti(f), m=mgrFattura(f);
-        return `<td class="num">${fmt(i.imp)}</td><td class="num">${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
+        return `<td class="num">${fmt(i.imp)}</td><td class="num">${fmt(i.iva)}</td><td class="num" title="${(IVA_DEBITO_PCT[f.soc]??100)}% dell'IVA${quotaIvaMgr(f)?' — il resto ('+fmt(quotaIvaMgr(f))+") va ad aumentare l'importo MGR":''}">${fmt(ivaDebito(f))}</td><td class="num" style="font-weight:600">${fmt(i.tot)}</td>
         <td class="num" style="${(m.manuale||(m.sponsor&&!m.nd))?'':'color:var(--text3)'}" title="${m.manuale?'MGR impostato su questa fattura'+(m.sponsor?' (diverso dal CRM: '+m.sponsor.nome+')':''):m.sponsor?(m.nd?'Sponsor trovato ('+m.sponsor.nome+') ma MGR non compilato: considerato 0':'MGR di '+m.sponsor.nome):'Sponsor non trovato in CRM: MGR considerato 0'}">${m.mgr}%</td>
-        <td class="num">${fmt(importoMgr(f))}</td>`; })()}
+        <td class="num" title="Imponibile × MGR ${m.mgr}% = ${fmt(Math.round((i.imp*m.mgr/100)*100)/100)}${quotaIvaMgr(f)?' + quota IVA non a debito '+fmt(quotaIvaMgr(f)):''}">${fmt(importoMgr(f))}</td>`; })()}
       <td>${f.anno||'—'}</td>
       <td>${f.senzaPdf?'<span style="font-size:10px;color:var(--text3)" title="Importata da XML: nessun PDF allegato. Usa Modifica per allegarlo">— no PDF</span>':`<button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button>${f.pdfDaXml?'<div style="font-size:9px;color:var(--text3)">copia di cortesia</div>':''}`}</td>
       ${isAdmin?`<td style="white-space:nowrap"><button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalModificaFattura('${f.id}')">✏️ Modifica</button> <button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
