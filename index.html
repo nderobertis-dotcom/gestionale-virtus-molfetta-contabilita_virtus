@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Gestionale Contabile — Gruppo Virtus 2026/2027</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -392,6 +393,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         </select>
         <input type="text" id="fa-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildFattureAttive()">
         <button class="btn btn-dark perm-admin no-print" onclick="apriModalUploadFattura()">+ Carica Fattura PDF</button>
+        <button class="btn perm-admin no-print" onclick="apriModalImportXml()">📥 Importa XML (SdI)</button>
       </div>
       <div id="fa-container"></div>
     </div>
@@ -3554,6 +3556,37 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+<!-- MODAL IMPORT FATTURE XML -->
+<div class="modal-overlay" id="modal-import-xml" onclick="if(event.target===this)chiudiModal('modal-import-xml')">
+  <div class="modal" style="width:820px;max-width:96vw">
+    <div class="modal-title">📥 Importa fatture emesse da XML (SdI)</div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Società emittente</label>
+        <select class="form-input" id="ix-soc" onchange="rielaboraImportXml()">
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Importo da registrare</label>
+        <select class="form-input" id="ix-modo" onchange="rielaboraImportXml()">
+          <option value="totale">Totale documento (IVA inclusa)</option>
+          <option value="imponibile">Imponibile (IVA esclusa)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row"><label style="font-size:12px;display:flex;gap:.5rem;align-items:center;cursor:pointer">
+      <input type="checkbox" id="ix-pdf" checked> Allega una copia di cortesia PDF generata dall'XML <span style="color:var(--text3)">(non è il documento originale)</span></label></div>
+    <div class="form-row"><label class="form-label">File XML (seleziona tutti i file della cartella XML)</label>
+      <input type="file" class="form-input" id="ix-files" accept=".xml" multiple onchange="leggiImportXml()">
+    </div>
+    <div id="ix-preview" style="max-height:340px;overflow:auto;margin:.5rem 0"></div>
+    <div id="ix-esito" style="font-size:11px;color:var(--text2)"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-import-xml')">Chiudi</button>
+      <button class="btn btn-dark" id="ix-btn" onclick="eseguiImportXml()" disabled>Importa</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL UPLOAD CONTRATTO PDF -->
 <div class="modal-overlay" id="modal-upload-contratto" onclick="if(event.target===this)chiudiModal('modal-upload-contratto')">
   <div class="modal" style="width:500px">
@@ -4601,7 +4634,7 @@ function buildFattureAttive(){
   // Card di riepilogo (rispettano i filtri attivi)
   const _tot = lista.reduce((a,f)=>a+(parseFloat(f.importo)||0),0);
   const _soc = k=>lista.filter(f=>f.soc===k).reduce((a,f)=>a+(parseFloat(f.importo)||0),0);
-  const _senzaImp = lista.filter(f=>!(parseFloat(f.importo)>0)).length;
+  const _senzaImp = lista.filter(f=>!parseFloat(f.importo)).length;
   const _m = document.getElementById('fa-metrics');
   if(_m) _m.innerHTML = `
     <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div>${_senzaImp?`<div style="font-size:10px;color:var(--text3)">${_senzaImp} senza importo</div>`:''}</div>
@@ -4649,10 +4682,199 @@ function buildFattureAttive(){
       <td>${f.cliente||'—'}</td>
       <td class="num">${f.importo?fmt(f.importo):'—'}</td>
       <td>${f.anno||'—'}</td>
-      <td><button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button></td>
+      <td>${f.senzaPdf?'<span style="font-size:10px;color:var(--text3)" title="Importata da XML: nessun PDF allegato. Usa Modifica per allegarlo">— no PDF</span>':`<button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','fattura')">📄 Apri</button>${f.pdfDaXml?'<div style="font-size:9px;color:var(--text3)">copia di cortesia</div>':''}`}</td>
       ${isAdmin?`<td style="white-space:nowrap"><button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalModificaFattura('${f.id}')">✏️ Modifica</button> <button class="btn-del" onclick="eliminaDoc('${f.id}','fattura')">✕</button></td>`:''}
     </tr>`).join('')}
     </tbody></table></div>`;
+}
+
+// ── IMPORT FATTURE DA XML (FatturaPA / SdI) ──
+let _ixRighe = [];
+function _xmlTesto(root, nome){ // primo elemento per localName (ignora namespace)
+  const all = root.getElementsByTagName('*');
+  for(const e of all) if(e.localName===nome) return (e.textContent||'').trim();
+  return '';
+}
+function _xmlTutti(root, nome){
+  const out=[]; for(const e of root.getElementsByTagName('*')) if(e.localName===nome) out.push(e);
+  return out;
+}
+// Numero fattura nel formato usato nel gestionale: "FPR 4/26" -> "4/26"
+function nrNormalizzato(n){
+  const m = String(n||'').match(/(\d+)\s*\/\s*(\d+)/);
+  return m ? `${parseInt(m[1],10)}/${m[2].slice(-2)}` : String(n||'').replace(/\s+/g,' ').trim();
+}
+function _xmlAnag(el){
+  const den = _xmlTesto(el,'Denominazione') || [_xmlTesto(el,'Nome'),_xmlTesto(el,'Cognome')].filter(Boolean).join(' ');
+  const sede = _xmlTutti(el,'Sede')[0];
+  const piva = _xmlTutti(el,'IdFiscaleIVA')[0];
+  return { den, piva: piva ? (_xmlTesto(piva,'IdPaese')+_xmlTesto(piva,'IdCodice')) : '', cf:_xmlTesto(el,'CodiceFiscale'),
+    indirizzo: sede ? [_xmlTesto(sede,'Indirizzo'),_xmlTesto(sede,'NumeroCivico')].filter(Boolean).join(' ') : '',
+    citta: sede ? [_xmlTesto(sede,'CAP'),_xmlTesto(sede,'Comune'),_xmlTesto(sede,'Provincia')?'('+_xmlTesto(sede,'Provincia')+')':''].filter(Boolean).join(' ') : '' };
+}
+const _TIPO_DOC = {TD01:'Fattura',TD02:'Acconto/anticipo su fattura',TD04:'Nota di credito',TD05:'Nota di debito',TD06:'Parcella'};
+const _MOD_PAG = {MP01:'Contanti',MP02:'Assegno',MP05:'Bonifico',MP08:'Carta di pagamento',MP12:'RIBA'};
+
+// Copia di cortesia PDF generata dall'XML (NON è il documento fiscale originale)
+function generaPdfFattura(r){
+  const { jsPDF } = window.jspdf || {};
+  if(!jsPDF) throw new Error('Libreria PDF non caricata (controlla la connessione)');
+  const d = r.dettaglio, doc = new jsPDF({unit:'mm',format:'a4'});
+  const W=210, M=15; let y=M;
+  const e = n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const seg = r.tipoDoc==='TD04' ? -1 : 1;
+  const nuovaPag = h=>{ if(y+h>282){ doc.addPage(); y=M; } };
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  const titolo = `${_TIPO_DOC[r.tipoDoc]||'Documento '+r.tipoDoc} n. ${r.nr}`;
+  doc.text(titolo, M, y+5);
+  const wTit = doc.getTextWidth(titolo);
+  doc.setFontSize(9); doc.setTextColor(150,0,0); doc.text('COPIA DI CORTESIA', M+wTit+4, y+5); doc.setTextColor(0); doc.setFontSize(15);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text('Data: '+r.data.split('-').reverse().join('/'), W-M, y+5, {align:'right'});
+  y+=10;
+  y+=2;
+  const blocco=(tit,a,x)=>{
+    let yy=y; doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(110); doc.text(tit,x,yy); doc.setTextColor(0);
+    yy+=4.5; doc.setFontSize(10); doc.text(doc.splitTextToSize(a.den,85),x,yy); yy+=5*doc.splitTextToSize(a.den,85).length;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    [a.indirizzo,a.citta,a.piva?'P.IVA '+a.piva:'',(a.cf&&a.cf!==(a.piva||'').slice(2))?'C.F. '+a.cf:''].filter(Boolean).forEach(t=>{ doc.text(t,x,yy); yy+=4.2; });
+    return yy;
+  };
+  const y1=blocco('CEDENTE / PRESTATORE',d.cedente,M), y2=blocco('CESSIONARIO / COMMITTENTE',d.cessionario,W/2+3);
+  y=Math.max(y1,y2)+4;
+  // righe
+  const col={d:M, q:118, p:140, i:164, t:W-M};
+  doc.setFillColor(235); doc.rect(M,y-4,W-2*M,6,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text('Descrizione',col.d+1,y); doc.text('Qtà',col.q,y,{align:'right'}); doc.text('Prezzo',col.p+12,y,{align:'right'}); doc.text('IVA %',col.i+4,y,{align:'right'}); doc.text('Importo',col.t-1,y,{align:'right'});
+  y+=6; doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  d.linee.forEach(l=>{
+    const righe=doc.splitTextToSize(l.desc||'',95); nuovaPag(4.5*righe.length+3);
+    doc.text(righe,col.d+1,y);
+    doc.text(String(l.qta),col.q,y,{align:'right'}); doc.text(e(l.prezzo*seg),col.p+12,y,{align:'right'});
+    doc.text(l.iva?e(parseFloat(l.iva)):(l.natura||'—'),col.i+4,y,{align:'right'}); doc.text(e(l.totale*seg),col.t-1,y,{align:'right'});
+    y+=4.5*righe.length+2; doc.setDrawColor(220); doc.line(M,y-1.5,W-M,y-1.5);
+  });
+  y+=3; nuovaPag(30);
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.text('RIEPILOGO IVA',M,y); y+=4.5; doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  d.riepilogo.forEach(x=>{ doc.text(`Aliquota ${x.iva?e(parseFloat(x.iva))+'%':(x.natura||'—')}`,M,y); doc.text('Imponibile '+e(x.imponibile*seg),95,y,{align:'right'}); doc.text('Imposta '+e(x.imposta*seg),140,y,{align:'right'}); y+=4.5; });
+  y+=2; doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text(`TOTALE DOCUMENTO  ${e(r.totale)} ${d.divisa==='EUR'?'EUR':d.divisa}`, W-M, y+2, {align:'right'}); y+=10;
+  if(d.pagamenti.length){
+    nuovaPag(8+5*d.pagamenti.length); doc.setFontSize(8); doc.text('PAGAMENTO',M,y); y+=4.5; doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    d.pagamenti.forEach(x=>{ doc.text(`${_MOD_PAG[x.modo]||x.modo}${x.scadenza?' - scadenza '+x.scadenza.split('-').reverse().join('/'):''} - ${e(x.importo*seg)} EUR`,M,y); y+=4.2;
+      if(x.iban||x.banca){ doc.text(`${x.banca||''}${x.iban?'  IBAN '+x.iban:''}`,M,y); y+=4.2; } });
+  }
+  if(d.causali.length){ y+=3; nuovaPag(10); doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.text('CAUSALE',M,y); y+=4.5; doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    d.causali.forEach(c=>{ const rr=doc.splitTextToSize(c,W-2*M); nuovaPag(4.5*rr.length); doc.text(rr,M,y); y+=4.5*rr.length; }); }
+  return doc.output('datauristring').replace(/^data:application\/pdf;[^,]*,/,'data:application/pdf;base64,');
+}
+
+function parseFatturaXml(testo){
+  const doc = new DOMParser().parseFromString(testo.replace(/^\uFEFF/,''), 'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error('XML non valido');
+  const ced = _xmlTutti(doc,'CedentePrestatore')[0];
+  const ces = _xmlTutti(doc,'CessionarioCommittente')[0];
+  if(!ced||!ces) throw new Error('Non è una fattura elettronica');
+  const den = _xmlTesto(ces,'Denominazione') || [_xmlTesto(ces,'Nome'),_xmlTesto(ces,'Cognome')].filter(Boolean).join(' ');
+  const g = _xmlTutti(doc,'DatiGeneraliDocumento')[0];
+  const imponibile = _xmlTutti(doc,'DatiRiepilogo').reduce((a,r)=>a+(parseFloat(_xmlTesto(r,'ImponibileImporto'))||0),0);
+  const iva = _xmlTutti(doc,'DatiRiepilogo').reduce((a,r)=>a+(parseFloat(_xmlTesto(r,'Imposta'))||0),0);
+  const totDoc = parseFloat(_xmlTesto(g,'ImportoTotaleDocumento'));
+  const tipoDoc = _xmlTesto(g,'TipoDocumento');
+  const segno = tipoDoc==='TD04' ? -1 : 1; // solo la nota di credito è negativa
+  return {
+    nr: nrNormalizzato(_xmlTesto(g,'Numero')), nrOriginale: _xmlTesto(g,'Numero'), data: _xmlTesto(g,'Data'), cliente: den, tipoDoc,
+    cedente: _xmlTesto(ced,'Denominazione'),
+    totale: Math.round((isNaN(totDoc)?imponibile+iva:totDoc)*100)/100*segno,
+    imponibile: Math.round(imponibile*100)/100*segno, iva: Math.round(iva*100)/100*segno,
+    descrizione: _xmlTesto(doc,'Descrizione'),
+    dettaglio: {
+      cedente: _xmlAnag(ced), cessionario: _xmlAnag(ces),
+      linee: _xmlTutti(doc,'DettaglioLinee').map(l=>({
+        desc:_xmlTesto(l,'Descrizione'), qta:parseFloat(_xmlTesto(l,'Quantita'))||1,
+        prezzo:parseFloat(_xmlTesto(l,'PrezzoUnitario'))||0, totale:parseFloat(_xmlTesto(l,'PrezzoTotale'))||0,
+        iva:_xmlTesto(l,'AliquotaIVA'), natura:_xmlTesto(l,'Natura') })),
+      riepilogo: _xmlTutti(doc,'DatiRiepilogo').map(r=>({ iva:_xmlTesto(r,'AliquotaIVA'), imponibile:parseFloat(_xmlTesto(r,'ImponibileImporto'))||0, imposta:parseFloat(_xmlTesto(r,'Imposta'))||0, natura:_xmlTesto(r,'Natura') })),
+      pagamenti: _xmlTutti(doc,'DettaglioPagamento').map(d=>({ modo:_xmlTesto(d,'ModalitaPagamento'), scadenza:_xmlTesto(d,'DataScadenzaPagamento'), importo:parseFloat(_xmlTesto(d,'ImportoPagamento'))||0, banca:_xmlTesto(d,'IstitutoFinanziario'), iban:_xmlTesto(d,'IBAN') })),
+      causali: _xmlTutti(doc,'Causale').map(c=>c.textContent.trim()),
+      divisa: _xmlTesto(g,'Divisa')||'EUR'
+    }
+  };
+}
+function apriModalImportXml(){
+  document.getElementById('ix-files').value='';
+  document.getElementById('ix-preview').innerHTML='';
+  document.getElementById('ix-esito').textContent='';
+  document.getElementById('ix-btn').disabled=true;
+  _ixRighe=[];
+  apriModal('modal-import-xml');
+}
+async function leggiImportXml(){
+  const files=[...document.getElementById('ix-files').files];
+  _ixRighe=[];
+  for(const f of files){
+    try{ _ixRighe.push({file:f.name, ...parseFatturaXml(await f.text())}); }
+    catch(e){ _ixRighe.push({file:f.name, errore:e.message}); }
+  }
+  rielaboraImportXml();
+}
+function rielaboraImportXml(){
+  const soc = document.getElementById('ix-soc').value;
+  const modo = document.getElementById('ix-modo').value;
+  const chiave = (n)=>nrNormalizzato(n).toUpperCase();
+  const esist = new Set(fattureAttive.filter(f=>f.soc===soc).map(f=>chiave(f.nr)));
+  const viste = new Set();
+  _ixRighe.forEach(r=>{
+    if(r.errore){ r.stato='Errore'; return; }
+    r.importo = modo==='totale' ? r.totale : r.imponibile;
+    const k = chiave(r.nr);
+    if(esist.has(k)) r.stato='Già presente';
+    else if(viste.has(k)) r.stato='Duplicato nei file';
+    else { r.stato='Nuova'; viste.add(k); }
+  });
+  _ixRighe.sort((a,b)=>(a.data||'').localeCompare(b.data||'')||(a.nr||'').localeCompare(b.nr||'','it',{numeric:true}));
+  const nuove=_ixRighe.filter(r=>r.stato==='Nuova');
+  const tot=nuove.reduce((a,r)=>a+r.importo,0);
+  const altroCed = _ixRighe.filter(r=>r.cedente && !r.cedente.toUpperCase().includes(soc)).length;
+  document.getElementById('ix-preview').innerHTML = _ixRighe.length ? `<div class="tbl-wrap"><table>
+    <thead><tr><th>Data</th><th>Nr.</th><th>Cliente</th><th>Tipo</th><th style="text-align:right">Importo</th><th>Stato</th></tr></thead>
+    <tbody>${_ixRighe.map(r=>r.errore?`<tr><td colspan="5">${r.file}: ${r.errore}</td><td>Errore</td></tr>`:`<tr style="${r.stato!=='Nuova'?'opacity:.5':''}">
+      <td style="white-space:nowrap">${fmtData(r.data)}</td><td>${r.nr}</td><td>${r.cliente}</td><td>${r.tipoDoc==='TD04'?'Nota di credito':r.tipoDoc}</td>
+      <td class="num">${fmt(r.importo)}</td><td>${r.stato}</td></tr>`).join('')}</tbody></table></div>` : '';
+  document.getElementById('ix-esito').innerHTML = _ixRighe.length ? `Da importare: <b>${nuove.length}</b> su ${_ixRighe.length} · totale ${fmt(tot)}${altroCed?` · <span style="color:var(--avere)">⚠ ${altroCed} fatture hanno un emittente diverso da ${soc}: controlla la società scelta</span>`:''}` : '';
+  document.getElementById('ix-btn').disabled = !nuove.length;
+  document.getElementById('ix-btn').textContent = nuove.length ? `Importa ${nuove.length} fatture` : 'Importa';
+}
+async function eseguiImportXml(){
+  const soc = document.getElementById('ix-soc').value;
+  const nuove=_ixRighe.filter(r=>r.stato==='Nuova');
+  if(!nuove.length) return;
+  if(!confirm(`Registrare ${nuove.length} fatture per ${soc}${document.getElementById('ix-pdf').checked?' con copia di cortesia PDF':' (senza PDF)'}?`)) return;
+  const btn=document.getElementById('ix-btn'); btn.disabled=true;
+  const esito=document.getElementById('ix-esito');
+  const conPdf = document.getElementById('ix-pdf').checked;
+  if(conPdf && !(window.jspdf&&window.jspdf.jsPDF)){ alert('Libreria PDF non caricata: ricarica la pagina o togli la spunta sul PDF.'); btn.disabled=false; return; }
+  let ok=0, err=0;
+  for(const r of nuove){
+    try{
+      const meta = {
+        soc, nr:r.nr, cliente:r.cliente, data:r.data, importo:r.importo, anno:(r.data||'').slice(0,4),
+        nrSdI:r.nrOriginale, tipoDoc:r.tipoDoc, imponibile:r.imponibile, iva:r.iva, fonte:'xml-sdi',
+        creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||''
+      };
+      if(conPdf){
+        meta.pdfDaXml = true;
+        await salvaPDFaChunk(FA_REF(), meta, generaPdfFattura(r), 'Fattura_'+r.nr.replace(/[^\w]+/g,'-')+'_copia-cortesia.pdf');
+      } else {
+        await FA_REF().add({...meta, senzaPdf:true, nomeFile:r.file});
+      }
+      ok++; esito.textContent=`Importate ${ok}/${nuove.length}...`;
+    }catch(e){ err++; console.error('Import',r.nr,e.message); }
+  }
+  esito.textContent = `Importate ${ok} fatture${err?`, ${err} con errore (riprova: quelle già importate verranno saltate)`:''}.`;
+  await caricaFattureAttive();
+  if(!err) setTimeout(()=>chiudiModal('modal-import-xml'),1200);
+  else { rielaboraImportXml(); }
 }
 
 function apriModalUploadFattura(){
@@ -4721,7 +4943,7 @@ async function salvaFatturaPDF(){
         if(nChunk>1){
           for(let i=0;i<nChunk;i++) await ref.collection('chunks').doc('chunk_'+i).set({data:b64.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), idx:i});
         }
-        Object.assign(upd,{ nomeFile:file.name, nChunk, usaChunk:nChunk>1,
+        Object.assign(upd,{ senzaPdf: firebase.firestore.FieldValue.delete(), nomeFile:file.name, nChunk, usaChunk:nChunk>1,
           b64: nChunk>1 ? firebase.firestore.FieldValue.delete() : b64 });
         await ref.update(upd);
         const oldN = old?.usaChunk ? (old.nChunk||0) : 0;
