@@ -354,6 +354,12 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
             <div style="font-size:15px;font-weight:800;color:#1A5C38">Fatture Attive</div>
             <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Archivio PDF fatture emesse</div>
           </div>
+          <!-- FATTURE PASSIVE -->
+          <div onclick="apriModulo('fatture-passive')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#7A1F3D';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="font-size:2.5rem;margin-bottom:.8rem">📑</div>
+            <div style="font-size:15px;font-weight:800;color:#7A1F3D">Fatture Passive</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Archivio fatture di acquisto</div>
+          </div>
           <!-- CONTRATTI -->
           <div onclick="apriModulo('contratti-doc')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#6B3A00';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
             <div style="font-size:2.5rem;margin-bottom:.8rem">📄</div>
@@ -400,6 +406,36 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <button class="btn btn-dark perm-admin no-print" onclick="apriModalContabilizza()">📒 Contabilizza in Prima Nota</button>
       </div>
       <div id="fa-container"></div>
+    </div>
+
+    <!-- ── FATTURE PASSIVE ── -->
+    <div id="page-fatture-passive" class="page">
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:.8rem">
+          <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
+          <div>
+            <div class="page-title">📑 Fatture Passive</div>
+            <div class="page-sub">Archivio fatture di acquisto — Caricamento riservato agli Admin</div>
+          </div>
+        </div>
+      </div>
+      <div id="fp-metrics"></div>
+      <div id="fp-fornitori" style="margin-bottom:1rem"></div>
+      <div class="toolbar no-print">
+        <select id="fp-filter-soc" class="form-input" style="width:auto" onchange="buildFatturePassive()">
+          <option value="">Tutte le società</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+        <select id="fp-filter-anno" class="form-input" style="width:auto" onchange="buildFatturePassive()">
+          <option value="">Tutti gli anni</option>
+          <option>2026</option><option>2027</option>
+        </select>
+        <input type="text" id="fp-search" class="form-input" placeholder="🔍 Cerca..." style="width:180px" oninput="buildFatturePassive()">
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalUploadPassiva()">+ Carica Fattura PDF</button>
+        <button class="btn perm-admin no-print" onclick="apriModalImportXmlPassive()">📥 Importa XML (SdI)</button>
+        <button class="btn btn-dark perm-admin no-print" onclick="apriModalContabilizzaPassive()">📒 Contabilizza in Prima Nota</button>
+      </div>
+      <div id="fp-container"></div>
     </div>
 
     <!-- ── CONTRATTI DOCUMENTI ── -->
@@ -3617,6 +3653,110 @@ async function cambiaRuoloUtente(uid,ruolo){
   </div>
 </div>
 
+<!-- MODAL UPLOAD FATTURA PASSIVA -->
+<div class="modal-overlay" id="modal-upload-passiva" onclick="if(event.target===this)chiudiModal('modal-upload-passiva')">
+  <div class="modal" style="width:500px">
+    <div class="modal-title" id="up-title">📑 Carica Fattura Passiva</div>
+    <input type="hidden" id="up-id">
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Società (intestataria)</label>
+        <select class="form-input" id="up-soc"><option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Anno</label>
+        <select class="form-input" id="up-anno"><option>2026</option><option>2027</option></select>
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">Nr. Fattura (come riportato dal fornitore)</label>
+      <input type="text" class="form-input" id="up-nr" placeholder="es. 123/2026">
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Fornitore</label>
+        <input type="text" class="form-input" id="up-fornitore" placeholder="Ragione sociale...">
+      </div>
+      <div class="form-row"><label class="form-label">P.IVA fornitore <span style="font-weight:400;color:var(--text3)">(facoltativa)</span></label>
+        <input type="text" class="form-input" id="up-piva" placeholder="11 cifre">
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Data fattura</label>
+        <input type="date" class="form-input" id="up-data">
+      </div>
+      <div class="form-row"><label class="form-label">Scadenza pagamento <span style="font-weight:400;color:var(--text3)">(facoltativa)</span></label>
+        <input type="date" class="form-input" id="up-scad">
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Imponibile € <span style="font-weight:400;color:var(--text3)">(negativo per le note di credito)</span></label>
+        <input type="number" step="0.01" class="form-input" id="up-imponibile" placeholder="0" oninput="aggiornaTotalePassiva()">
+      </div>
+      <div class="form-row"><label class="form-label">Aliquota IVA %</label>
+        <input type="number" step="0.01" class="form-input" id="up-aliquota" value="22" oninput="aggiornaTotalePassiva()">
+      </div>
+    </div>
+    <div id="up-totale-prev" style="font-size:12px;color:var(--text2);margin:-.2rem 0 .8rem"></div>
+    <div class="form-row"><label class="form-label" id="up-file-label">File PDF</label>
+      <input type="file" class="form-input" id="up-file" accept=".pdf" onchange="const f=this.files[0];document.getElementById('up-preview').textContent=f?f.name+' ('+(f.size/1024).toFixed(0)+' KB)':''">
+      <div id="up-preview" style="margin-top:.4rem;font-size:11px;color:var(--text2)"></div>
+    </div>
+    <div id="up-progress" style="display:none;margin:.5rem 0">
+      <div style="background:var(--bg3);border-radius:4px;height:6px"><div id="up-progress-bar" style="background:var(--verde);height:6px;border-radius:4px;width:0%;transition:width .3s"></div></div>
+      <div id="up-progress-txt" style="font-size:10px;color:var(--text2);margin-top:.2rem">Caricamento...</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-upload-passiva')">Annulla</button>
+      <button class="btn btn-dark" id="up-btn" onclick="salvaFatturaPassiva()">Carica</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORT XML FATTURE PASSIVE -->
+<div class="modal-overlay" id="modal-import-xml-passive" onclick="if(event.target===this)chiudiModal('modal-import-xml-passive')">
+  <div class="modal" style="width:880px;max-width:96vw">
+    <div class="modal-title">📥 Importa fatture di acquisto da XML (SdI)</div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Società intestataria</label>
+        <select class="form-input" id="px-soc" onchange="rielaboraImportXmlPassive()">
+          <option value="">Rileva dall'XML (cessionario/committente)</option>
+          <option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Importi</label>
+        <div style="font-size:12px;color:var(--text2);padding:.5rem 0">Imponibile, IVA e totale vengono letti dall'XML</div>
+      </div>
+    </div>
+    <div class="form-row"><label style="font-size:12px;display:flex;gap:.5rem;align-items:center;cursor:pointer">
+      <input type="checkbox" id="px-pdf" checked> Allega una copia di cortesia PDF generata dall'XML <span style="color:var(--text3)">(non è il documento originale)</span></label></div>
+    <div class="form-row"><label class="form-label">File XML (anche .xml.p7m, selezione multipla)</label>
+      <input type="file" class="form-input" id="px-files" accept=".xml,.p7m" multiple onchange="leggiImportXmlPassive()">
+    </div>
+    <div id="px-preview" style="max-height:340px;overflow:auto;margin:.5rem 0"></div>
+    <div id="px-esito" style="font-size:11px;color:var(--text2)"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-import-xml-passive')">Chiudi</button>
+      <button class="btn btn-dark" id="px-btn" onclick="eseguiImportXmlPassive()" disabled>Importa</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONTABILIZZA FATTURE PASSIVE -->
+<div class="modal-overlay" id="modal-contabilizza-passive" onclick="if(event.target===this)chiudiModal('modal-contabilizza-passive')">
+  <div class="modal" style="width:1180px;max-width:97vw">
+    <div class="modal-title">📒 Contabilizza fatture passive in Prima Nota</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">
+      Dare: conto di costo generico (imponibile + eventuale IVA indetraibile) e IVA a credito (quota detraibile). Avere: fornitore per il totale fattura.
+      Il costo va su <b>4.8.1 Costi generici da classificare</b>: potrai poi girarlo sui conti corretti dalla Prima Nota. Le note di credito vengono registrate a storno.
+    </div>
+    <div id="cp-mappa" style="margin-bottom:.6rem"></div>
+    <div id="cp-preview" style="max-height:46vh;overflow:auto"></div>
+    <div id="cp-esito" style="font-size:12px;color:var(--text2);margin:.6rem 0"></div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <a href="#" id="cp-annulla" style="font-size:11px;color:var(--rosso)" onclick="annullaContabilizzazionePassive();return false"></a>
+      <span><button class="btn" onclick="chiudiModal('modal-contabilizza-passive')">Chiudi</button>
+      <button class="btn btn-dark" id="cp-btn" onclick="eseguiContabilizzaPassive()" disabled>Registra</button></span>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL UPLOAD CONTRATTO PDF -->
 <div class="modal-overlay" id="modal-upload-contratto" onclick="if(event.target===this)chiudiModal('modal-upload-contratto')">
   <div class="modal" style="width:500px">
@@ -3900,6 +4040,7 @@ async function cambiaRuoloUtente(uid,ruolo){
 // DATI DOCUMENTI (Firestore collections separate)
 // ══════════════════════════════════════════════════════════════
 let fattureAttive = [];
+let fatturePassive = [];
 let contrattiDoc  = [];
 let _tabContratti = 'staff';
 let crmSponsor    = [];
@@ -4621,6 +4762,10 @@ function apriModulo(modulo){
     sidebar.style.display = 'none';
     caricaFattureAttive();
     showPage('fatture-attive', null);
+  } else if(modulo === 'fatture-passive'){
+    sidebar.style.display = 'none';
+    caricaFatturePassive();
+    showPage('fatture-passive', null);
   } else if(modulo === 'contratti-doc'){
     sidebar.style.display = 'none';
     caricaContrattiDoc();
@@ -5402,6 +5547,540 @@ async function salvaFatturaPDF(){
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// FATTURE PASSIVE (fatture di acquisto)
+// Collezione Firestore `fatture_passive`: stessa struttura delle attive, ma la controparte è il FORNITORE
+// (CedentePrestatore dell'XML) e la società intestataria è il cessionario/committente.
+// ══════════════════════════════════════════════════════════════
+const FP_REF = () => db.collection('fatture_passive');
+async function caricaFatturePassive(){
+  try{
+    const snap = await FP_REF().orderBy('data','desc').get();
+    fatturePassive = snap.docs.map(d=>({id:d.id,...d.data()}));
+    buildFatturePassive();
+  }catch(e){ console.error('Fatture passive:',e.message); }
+}
+// Totale documento: quello dell'XML se presente (include bollo ecc.), altrimenti imponibile + IVA
+function fpTot(f){
+  const v = parseFloat(f.importo);
+  return isFinite(v) ? v : fatturaImporti(f).tot;
+}
+function _fpNr(n){ return String(n||'').replace(/\s+/g,' ').trim().toUpperCase(); }
+// Chiave anti-doppione: il numero fattura è univoco solo PER FORNITORE (non come nelle vendite)
+function fpChiave(f){
+  const piva = String(f.pivaFornitore||'').replace(/\D/g,'');
+  return (piva || _normNome(f.fornitore)) + '|' + _fpNr(f.nr);
+}
+function _fpDetectSoc(den){
+  const u = String(den||'').toUpperCase();
+  const t = SOC.filter(s=>u.includes(s));
+  return t.length===1 ? t[0] : null;
+}
+
+function buildFatturePassive(){
+  const filtSoc  = document.getElementById('fp-filter-soc')?.value||'';
+  const filtAnno = document.getElementById('fp-filter-anno')?.value||'';
+  const search   = document.getElementById('fp-search')?.value?.toLowerCase()||'';
+  const isAdmin  = window.currentRuolo==='admin';
+  let lista = fatturePassive.filter(f=>{
+    if(filtSoc  && f.soc!==filtSoc) return false;
+    if(filtAnno && f.anno!==filtAnno) return false;
+    if(search && !f.fornitore?.toLowerCase().includes(search) && !f.nr?.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  lista.sort((x,y)=>{
+    const d = (y.data||'').localeCompare(x.data||'');
+    if(d) return d;
+    return (y.nr||'').localeCompare(x.nr||'', 'it', {numeric:true});
+  });
+  const _sum = (arr,fn)=>arr.reduce((a,x)=>a+fn(x),0);
+  const _sub = t=>`<div style="font-size:11px;color:var(--text2);margin-top:.25rem">${t}</div>`;
+  const totImp = _sum(lista,f=>fatturaImporti(f).imp), totIva = _sum(lista,f=>fatturaImporti(f).iva), totTot = _sum(lista,f=>fpTot(f));
+  const socCard = (k)=>{
+    const L = lista.filter(f=>f.soc===k);
+    return `<div class="metric"><div class="metric-label">${k[0]+k.slice(1).toLowerCase()} (totale)</div><div class="metric-value">${fmt(_sum(L,f=>fpTot(f)))}</div>
+      ${_sub(`${L.length} fatt. · imponibile <b>${fmt(_sum(L,f=>fatturaImporti(f).imp))}</b>`)}</div>`;
+  };
+  const m = document.getElementById('fp-metrics');
+  if(m) m.innerHTML = `
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div></div>
+      <div class="metric"><div class="metric-label">Imponibile</div><div class="metric-value">${fmt(totImp)}</div></div>
+      <div class="metric"><div class="metric-label">IVA</div><div class="metric-value">${fmt(totIva)}</div></div>
+      <div class="metric"><div class="metric-label">Totale fatture</div><div class="metric-value">${fmt(totTot)}</div></div>
+    </div>
+    <div class="metrics metrics-3">${socCard('VIRTUS')}${socCard('DINAMO')}${socCard('INVICTA')}</div>`;
+
+  // Card per fornitore (clic = filtra)
+  const fo = {};
+  lista.forEach(f=>{
+    const k = _normNome(f.fornitore) || (f.fornitore||'—').trim().toUpperCase();
+    (fo[k] = fo[k]||{nome:(f.fornitore||'—').trim(),imp:0,n:0});
+    fo[k].imp += fatturaImporti(f).imp; fo[k].n++;
+  });
+  const arr = Object.values(fo).sort((a,b)=>b.imp-a.imp||a.nome.localeCompare(b.nome));
+  const fc = document.getElementById('fp-fornitori');
+  if(fc) fc.innerHTML = arr.length ? `
+    <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Per fornitore (${arr.length}) ${search?`· <a href="#" onclick="document.getElementById('fp-search').value='';buildFatturePassive();return false">rimuovi filtro</a>`:''}</div>
+    <div class="metrics" style="margin-bottom:0">${arr.map(c=>`
+      <div class="metric" style="cursor:pointer${search&&c.nome.toLowerCase()===search?';border-color:var(--text1)':''}" onclick="document.getElementById('fp-search').value=${JSON.stringify(c.nome).replace(/"/g,'&quot;')};buildFatturePassive()">
+        <div class="metric-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c.nome.replace(/"/g,'&quot;')}">${c.nome}</div>
+        <div class="metric-value" style="font-size:16px">${fmt(c.imp)}</div>
+        <div style="font-size:10px;color:var(--text3)">imponibile · ${c.n} fatt.</div>
+      </div>`).join('')}</div>` : '';
+
+  const cont = document.getElementById('fp-container');
+  if(!cont) return;
+  if(!lista.length){ cont.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuna fattura passiva caricata</div>'; return; }
+  cont.innerHTML = `<div class="tbl-wrap scrollx"><table>
+    <thead><tr>
+      <th>Soc.</th><th>Nr. Fattura</th><th>Data</th><th>Fornitore</th>
+      <th style="text-align:right">Imponibile</th><th style="text-align:right">IVA</th><th style="text-align:right">Totale</th>
+      <th>Scadenza</th><th>Anno</th><th>PDF</th>${isAdmin?'<th></th>':''}
+    </tr></thead>
+    <tbody>${lista.map(f=>{ const i=fatturaImporti(f); return `<tr>
+      <td><span class="badge-soc badge-${f.soc?.[0]?.toLowerCase()}">${f.soc}</span></td>
+      <td style="font-weight:600">${f.nr||'—'}${f.tipoDoc==='TD04'?' <span style="font-weight:400;color:var(--rosso)">(NC)</span>':''}${registrazioni.some(r=>r.fatturaId===f.id)?' <span title="Registrata in Prima Nota" style="font-weight:400">📒</span>':''}</td>
+      <td style="white-space:nowrap">${fmtData(f.data)}</td>
+      <td>${f.fornitore||'—'}</td>
+      <td class="num">${fmt(i.imp)}</td><td class="num">${fmt(i.iva)}</td><td class="num" style="font-weight:600">${fmt(fpTot(f))}</td>
+      <td style="white-space:nowrap">${f.scadenzaPag?fmtData(f.scadenzaPag):'—'}</td>
+      <td>${f.anno||'—'}</td>
+      <td>${f.senzaPdf?'<span style="font-size:10px;color:var(--text3)" title="Importata da XML: nessun PDF allegato. Usa Modifica per allegarlo">— no PDF</span>':`<button class="btn" style="font-size:10px;padding:2px 10px" onclick="apriPDF('${f.id}','passiva')">📄 Apri</button>${f.pdfDaXml?'<div style="font-size:9px;color:var(--text3)">copia di cortesia</div>':''}`}</td>
+      ${isAdmin?`<td style="white-space:nowrap"><button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalModificaPassiva('${f.id}')">✏️ Modifica</button> <button class="btn-del" onclick="eliminaFatturaPassiva('${f.id}')">✕</button></td>`:''}
+    </tr>`;}).join('')}
+    </tbody></table></div>`;
+}
+
+// ── Caricamento / modifica manuale ──
+function aggiornaTotalePassiva(){
+  const imp = parseFloat(document.getElementById('up-imponibile').value)||0;
+  const al  = parseFloat(document.getElementById('up-aliquota').value)||0;
+  const iva = Math.round(imp*al)/100, tot = Math.round((imp+iva)*100)/100;
+  document.getElementById('up-totale-prev').innerHTML = imp ? `IVA <b>${fmt(iva)}</b> · Totale fattura <b>${fmt(tot)}</b>` : '';
+}
+function apriModalUploadPassiva(){
+  document.getElementById('up-id').value = '';
+  document.getElementById('up-title').textContent = '📑 Carica Fattura Passiva';
+  document.getElementById('up-btn').textContent = 'Carica';
+  document.getElementById('up-file-label').textContent = 'File PDF';
+  document.getElementById('up-file').value = '';
+  document.getElementById('up-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('up-scad').value = '';
+  ['up-nr','up-fornitore','up-piva','up-imponibile'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('up-aliquota').value = '22';
+  aggiornaTotalePassiva();
+  document.getElementById('up-preview').textContent = '';
+  document.getElementById('up-progress').style.display = 'none';
+  apriModal('modal-upload-passiva');
+}
+function apriModalModificaPassiva(id){
+  const f = fatturePassive.find(x=>x.id===id); if(!f) return;
+  const anno = document.getElementById('up-anno');
+  if(f.anno && ![...anno.options].some(o=>o.value===f.anno)) anno.add(new Option(f.anno,f.anno));
+  document.getElementById('up-id').value = id;
+  document.getElementById('up-title').textContent = '✏️ Modifica Fattura Passiva';
+  document.getElementById('up-btn').textContent = 'Salva modifiche';
+  document.getElementById('up-file-label').textContent = 'Sostituisci/allega PDF (vuoto = mantieni quello attuale: '+(f.nomeFile||'—')+')';
+  document.getElementById('up-soc').value = f.soc||'VIRTUS';
+  document.getElementById('up-anno').value = f.anno||'';
+  document.getElementById('up-nr').value = f.nr||'';
+  document.getElementById('up-fornitore').value = f.fornitore||'';
+  document.getElementById('up-piva').value = f.pivaFornitore||'';
+  document.getElementById('up-data').value = f.data||'';
+  document.getElementById('up-scad').value = f.scadenzaPag||'';
+  const i = fatturaImporti(f);
+  document.getElementById('up-imponibile').value = i.imp||'';
+  document.getElementById('up-aliquota').value = i.imp ? String(Math.round(i.iva/i.imp*10000)/100) : '22';
+  window._upImportiOrig = document.getElementById('up-imponibile').value+'|'+document.getElementById('up-aliquota').value;
+  aggiornaTotalePassiva();
+  document.getElementById('up-file').value = '';
+  document.getElementById('up-preview').textContent = '';
+  document.getElementById('up-progress').style.display = 'none';
+  apriModal('modal-upload-passiva');
+}
+async function salvaFatturaPassiva(){
+  const editId = document.getElementById('up-id').value;
+  const file = document.getElementById('up-file').files[0];
+  if(!file && !editId){ alert('Seleziona un file PDF.'); return; }
+  const g = x=>document.getElementById(x).value.trim();
+  const soc = g('up-soc'), nr = g('up-nr'), fornitore = g('up-fornitore'), data = g('up-data'), anno = g('up-anno');
+  const pivaFornitore = g('up-piva').replace(/\D/g,''), scadenzaPag = g('up-scad');
+  const imponibile = Math.round((parseFloat(g('up-imponibile'))||0)*100)/100;
+  const aliquota = parseFloat(g('up-aliquota'))||0;
+  const iva = Math.round(imponibile*aliquota)/100;
+  const importo = Math.round((imponibile+iva)*100)/100;
+  if(!nr||!fornitore){ alert('Inserisci numero fattura e fornitore.'); return; }
+  if(!data){ alert('Inserisci la data fattura.'); return; }
+  if(!imponibile){ alert('Inserisci l\'imponibile (diverso da zero).'); return; }
+  const chiave = fpChiave({fornitore, pivaFornitore, nr});
+  const dup = fatturePassive.find(x=>x.id!==editId && x.soc===soc && fpChiave(x)===chiave);
+  if(dup && !confirm(`Esiste già la fattura ${dup.nr} di ${dup.fornitore} per ${soc}. Salvare comunque?`)) return;
+
+  const prog = document.getElementById('up-progress'), bar = document.getElementById('up-progress-bar'), txt = document.getElementById('up-progress-txt');
+  prog.style.display = 'block'; bar.style.width = '30%'; txt.textContent = 'Salvataggio...';
+  try{
+    if(editId){
+      const old = fatturePassive.find(x=>x.id===editId);
+      const ref = FP_REF().doc(editId);
+      const importiCambiati = (g('up-imponibile')+'|'+g('up-aliquota')) !== window._upImportiOrig;
+      const del = firebase.firestore.FieldValue.delete();
+      const upd = { soc, nr, fornitore, data, anno, pivaFornitore: pivaFornitore||del, scadenzaPag: scadenzaPag||del,
+        modificatoIl:new Date().toISOString(), modificatoDA:window._currentUser?.nome||'' };
+      if(importiCambiati) Object.assign(upd,{ importo, imponibile, iva });
+      if(file){
+        const b64 = await fileToBase64(file);
+        const nChunk = Math.ceil(b64.length / CHUNK_SIZE);
+        if(nChunk>1) for(let i=0;i<nChunk;i++) await ref.collection('chunks').doc('chunk_'+i).set({data:b64.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), idx:i});
+        Object.assign(upd,{ senzaPdf:del, pdfDaXml:del, nomeFile:file.name, nChunk, usaChunk:nChunk>1, b64: nChunk>1 ? del : b64 });
+        await ref.update(upd);
+        const oldN = old?.usaChunk ? (old.nChunk||0) : 0;
+        for(let i=(nChunk>1?nChunk:0); i<oldN; i++) await ref.collection('chunks').doc('chunk_'+i).delete();
+      } else await ref.update(upd);
+    } else {
+      bar.style.width = '60%'; txt.textContent = 'Salvataggio su cloud...';
+      const b64 = await fileToBase64(file);
+      const meta = { soc, nr, fornitore, data, importo, imponibile, iva, anno,
+        ...(pivaFornitore?{pivaFornitore}:{}), ...(scadenzaPag?{scadenzaPag}:{}),
+        nomeFile:file.name, creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||'' };
+      await salvaPDFaChunk(FP_REF(), meta, b64, file.name);
+    }
+    bar.style.width = '100%'; txt.textContent = 'Salvato!';
+    setTimeout(()=>{ chiudiModal('modal-upload-passiva'); caricaFatturePassive(); }, 500);
+  }catch(e){ alert('Errore: '+e.message); prog.style.display = 'none'; }
+}
+async function eliminaFatturaPassiva(id){
+  const d = fatturePassive.find(x=>x.id===id); if(!d) return;
+  const reg = registrazioni.filter(r=>r.fatturaId===id).length;
+  if(!confirm(`Eliminare la fattura ${d.nr} di ${d.fornitore}?${reg?`\n\nATTENZIONE: è già registrata in Prima Nota. La registrazione NON viene eliminata.`:''}`)) return;
+  const ref = FP_REF().doc(id);
+  try{ if(d.usaChunk) for(let i=0;i<(d.nChunk||0);i++) await ref.collection('chunks').doc('chunk_'+i).delete(); }
+  catch(e){ console.warn('Pulizia chunk:',e.message); }
+  await ref.delete();
+  caricaFatturePassive();
+}
+
+// ── Import XML (SdI) — anche .p7m ──
+let _pxRighe = [];
+// Il .p7m è l'XML avvolto in una busta di firma: l'XML è presente in chiaro dentro il file binario
+async function fpLeggiTesto(file){
+  if(!/\.p7m$/i.test(file.name)) return await file.text();
+  const estrai = txt=>{
+    const s = txt.search(/<(?:\w+:)?FatturaElettronica[\s>]/);
+    if(s<0) return null;
+    const re = /<\/(?:\w+:)?FatturaElettronica>/g; let end=-1, m;
+    while((m=re.exec(txt))) end = m.index + m[0].length;
+    return end>s ? txt.slice(s,end) : null;
+  };
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let x = estrai(new TextDecoder('utf-8').decode(buf));
+  if(!x){ // .p7m codificato in base64
+    const raw = new TextDecoder('latin1').decode(buf).replace(/\s+/g,'');
+    if(/^[A-Za-z0-9+/=]+$/.test(raw)){
+      try{ x = estrai(new TextDecoder('utf-8').decode(Uint8Array.from(atob(raw),c=>c.charCodeAt(0)))); }catch(e){}
+    }
+  }
+  if(!x) throw new Error('Impossibile estrarre l\'XML dal .p7m: scarica la fattura in XML non firmato (o il file "leggibile") da SdI/commercialista');
+  return x;
+}
+function fpParse(testo){
+  if((testo.match(/<(?:\w+:)?DatiGeneraliDocumento[\s>]/g)||[]).length>1) throw new Error('File con più fatture (lotto): non supportato');
+  const r = parseFatturaXml(testo);
+  const d = r.dettaglio;
+  return { ...r,
+    nrFornitore: r.nrOriginale,
+    fornitore: d.cedente.den || r.cedente,
+    pivaFornitore: String(d.cedente.piva||'').replace(/^IT/,'').replace(/\D/g,''),
+    socRilevata: _fpDetectSoc(d.cessionario.den),
+    intestatario: d.cessionario.den,
+    scadenzaPag: (d.pagamenti.find(p=>p.scadenza)||{}).scadenza||'' };
+}
+function apriModalImportXmlPassive(){
+  document.getElementById('px-files').value='';
+  document.getElementById('px-preview').innerHTML='';
+  document.getElementById('px-esito').textContent='';
+  document.getElementById('px-btn').disabled=true;
+  _pxRighe=[];
+  apriModal('modal-import-xml-passive');
+}
+async function leggiImportXmlPassive(){
+  const files=[...document.getElementById('px-files').files];
+  _pxRighe=[];
+  for(const f of files){
+    try{ _pxRighe.push({file:f.name, ...fpParse(await fpLeggiTesto(f))}); }
+    catch(e){ _pxRighe.push({file:f.name, errore:e.message}); }
+  }
+  rielaboraImportXmlPassive();
+}
+function rielaboraImportXmlPassive(){
+  const forzata = document.getElementById('px-soc').value;
+  const esist = new Set(fatturePassive.map(f=>f.soc+'|'+fpChiave(f)));
+  const viste = new Set();
+  _pxRighe.forEach(r=>{
+    if(r.errore){ r.stato='Errore'; return; }
+    r.soc = forzata || r.socRilevata;
+    r.importo = r.totale;
+    r.warn = Math.abs(r.totale - (r.imponibile + r.iva)) > 0.005;
+    if(!r.soc){ r.stato='Società non riconosciuta'; return; }
+    const k = r.soc+'|'+fpChiave({fornitore:r.fornitore,pivaFornitore:r.pivaFornitore,nr:r.nrFornitore});
+    if(esist.has(k)) r.stato='Già presente';
+    else if(viste.has(k)) r.stato='Duplicato nei file';
+    else { r.stato='Nuova'; viste.add(k); }
+  });
+  _pxRighe.sort((a,b)=>(a.data||'').localeCompare(b.data||'')||(a.nrFornitore||'').localeCompare(b.nrFornitore||'','it',{numeric:true}));
+  const nuove = _pxRighe.filter(r=>r.stato==='Nuova');
+  const nonRic = _pxRighe.filter(r=>r.stato==='Società non riconosciuta').length;
+  document.getElementById('px-preview').innerHTML = _pxRighe.length ? `<div class="tbl-wrap"><table>
+    <thead><tr><th>Soc.</th><th>Data</th><th>Nr.</th><th>Fornitore</th><th>Tipo</th><th style="text-align:right">Imponibile</th><th style="text-align:right">IVA</th><th style="text-align:right">Totale</th><th>Stato</th></tr></thead>
+    <tbody>${_pxRighe.map(r=>r.errore?`<tr><td colspan="8">${r.file}: ${r.errore}</td><td>Errore</td></tr>`:`<tr style="${r.stato!=='Nuova'?'opacity:.5':''}">
+      <td>${r.soc||'—'}</td><td style="white-space:nowrap">${fmtData(r.data)}</td><td>${r.nrFornitore}</td><td>${r.fornitore}</td><td>${r.tipoDoc==='TD04'?'Nota di credito':r.tipoDoc}</td>
+      <td class="num">${fmt(r.imponibile)}</td><td class="num">${fmt(r.iva)}</td><td class="num">${fmt(r.importo)}${r.warn?' <span title="Il totale del documento è diverso da imponibile + IVA (es. bollo): il totale XML viene usato per il debito verso il fornitore" style="color:var(--avere)">⚠</span>':''}</td>
+      <td>${r.stato}${r.stato==='Società non riconosciuta'?`<div style="font-size:10px">intestata a: ${r.intestatario||'—'}</div>`:''}</td></tr>`).join('')}</tbody></table></div>` : '';
+  document.getElementById('px-esito').innerHTML = _pxRighe.length ? `Nuove da importare: <b>${nuove.length}</b> (totale ${fmt(nuove.reduce((a,r)=>a+r.importo,0))}) su ${_pxRighe.length} file${nonRic?` · <span style="color:var(--avere)">⚠ ${nonRic} con intestatario non riconosciuto: scegli la società nel menu in alto</span>`:''}` : '';
+  document.getElementById('px-btn').disabled = !nuove.length;
+  document.getElementById('px-btn').textContent = nuove.length ? `Importa ${nuove.length} nuove` : 'Importa';
+}
+async function eseguiImportXmlPassive(){
+  const nuove=_pxRighe.filter(r=>r.stato==='Nuova');
+  if(!nuove.length) return;
+  const conPdf = document.getElementById('px-pdf').checked;
+  if(!confirm(`Registrare ${nuove.length} fatture passive${conPdf?' con copia di cortesia PDF':' (senza PDF)'}?`)) return;
+  if(conPdf && !(window.jspdf&&window.jspdf.jsPDF)){ alert('Libreria PDF non caricata: ricarica la pagina o togli la spunta sul PDF.'); return; }
+  const btn=document.getElementById('px-btn'); btn.disabled=true;
+  const esito=document.getElementById('px-esito');
+  let ok=0, err=0;
+  for(const r of nuove){
+    try{
+      const meta = {
+        soc:r.soc, nr:r.nrFornitore, fornitore:r.fornitore, ...(r.pivaFornitore?{pivaFornitore:r.pivaFornitore}:{}),
+        data:r.data, importo:r.importo, imponibile:r.imponibile, iva:r.iva, anno:(r.data||'').slice(0,4), tipoDoc:r.tipoDoc,
+        ...(r.scadenzaPag?{scadenzaPag:r.scadenzaPag}:{}), fonte:'xml-sdi',
+        creatoIl:new Date().toISOString(), creatoDA:window._currentUser?.nome||''
+      };
+      if(conPdf){
+        meta.pdfDaXml = true;
+        await salvaPDFaChunk(FP_REF(), meta, generaPdfFattura({...r, nr:r.nrFornitore}), 'FatturaPassiva_'+r.nrFornitore.replace(/[^\w]+/g,'-')+'_copia-cortesia.pdf');
+      } else await FP_REF().add({...meta, senzaPdf:true, nomeFile:r.file});
+      ok++; esito.textContent=`Importate ${ok}/${nuove.length}...`;
+    }catch(e){ err++; console.error('Import passive',r.nrFornitore,e.message); }
+  }
+  esito.textContent = `Importate ${ok} fatture.${err?` ${err} con errore (riprova: quelle già fatte verranno saltate)`:''}`;
+  await caricaFatturePassive();
+  if(!err) setTimeout(()=>chiudiModal('modal-import-xml-passive'),1500);
+  else rielaboraImportXmlPassive();
+}
+
+// ── CONTABILIZZAZIONE IN PRIMA NOTA ──
+// Dare: costo generico (imponibile + IVA indetraibile + eventuali extra tipo bollo) · Dare: IVA a credito (quota detraibile)
+// Avere: fornitore per il totale documento. Note di credito: stesse righe a lati invertiti.
+const CP_MAP_KEY = 'cp_map_v1';
+const CP_COSTO_DEFAULT = '4.8.1 — Costi generici da classificare';
+let _cpRighe = [];
+function _cpMappaDefault(){
+  const cod = c=>pianoConti.find(x=>x.codice===c);
+  const costo = _ctLab(cod('4.8.1')) || CP_COSTO_DEFAULT;
+  const ivaCred = _ctLab(cod('1.2.2'));
+  // IVA detraibile: ipotesi di partenza (modificabile) — Virtus regime ordinario 100%; Dinamo/Invicta (regime 398/91) nessuna detrazione analitica
+  return {
+    VIRTUS:  { costo, ivaCred, detr:100 },
+    DINAMO:  { costo, ivaCred, detr:0 },
+    INVICTA: { costo, ivaCred, detr:0 },
+    gruppo:  _ctLab(cod('2.1'))
+  };
+}
+function _cpMappa(){
+  const out = _cpMappaDefault(); let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(CP_MAP_KEY)||'null'); }catch(e){}
+  if(saved){
+    for(const k of SOC){
+      if(saved[k]?.costo && (_ctContoDaTesto(saved[k].costo) || /^4\.8\.1\b/.test(saved[k].costo))) out[k].costo = saved[k].costo;
+      if(saved[k]?.ivaCred && _ctContoDaTesto(saved[k].ivaCred)) out[k].ivaCred = saved[k].ivaCred;
+      if(typeof saved[k]?.detr==='number' && saved[k].detr>=0 && saved[k].detr<=100) out[k].detr = saved[k].detr;
+    }
+    if(saved.gruppo && _ctContoDaTesto(saved.gruppo)) out.gruppo = saved.gruppo;
+  }
+  return out;
+}
+function _cpLeggiMappa(){
+  const m = {};
+  for(const k of SOC){
+    const d = parseFloat(document.getElementById(`cp-${k}-detr`)?.value);
+    m[k] = { costo:document.getElementById(`cp-${k}-costo`)?.value.trim()||'', ivaCred:document.getElementById(`cp-${k}-ivaCred`)?.value.trim()||'',
+             detr: isFinite(d) ? Math.min(100,Math.max(0,d)) : 0 };
+  }
+  m.gruppo = document.getElementById('cp-gruppo')?.value.trim()||'';
+  return m;
+}
+function _cpRisolviCosto(soc, mappa){
+  const t = mappa[soc]?.costo, c = _ctContoDaTesto(t);
+  if(c) return {id:c.id};
+  if(/^4\.8\.1\b/.test(t||'')) return {id:'4.8.1', daCreare:true};
+  return null;
+}
+// Conto fornitore: conto di classe 2 senza figli (esclusi i debiti tributari 2.4) con lo stesso nome del fornitore
+function _cpContoFornitore(f){
+  const n = _normNome(f.fornitore); if(!n) return null;
+  const pool = pianoConti.filter(c=>parseInt(c.classe||c.codice?.split('.')[0])===2 && !c.codice.startsWith('2.4')
+    && c.tipo!=='classe' && !pianoConti.some(x=>x.padre===c.id));
+  const c = pool.find(c=>{ const m=_normNome(c.nome); return m && (m===n || (Math.min(m.length,n.length)>=4 && (m.startsWith(n+' ')||n.startsWith(m+' ')))); });
+  return c ? {id:c.id} : null;
+}
+function _cpCalcola(f, detr){
+  const i = fatturaImporti(f);
+  const neg = f.tipoDoc==='TD04' || fpTot(f)<0 || i.imp<0;
+  const c = x=>Math.round(Math.abs(x)*100);
+  const imp = c(i.imp), iva = c(i.iva), tot = c(fpTot(f));
+  const ivaDet = Math.round(iva*detr/100);
+  return {neg, tot, ivaDet, ivaInd:iva-ivaDet, costo:tot-ivaDet, extra:tot-imp-iva, detr};
+}
+function _cpPossibileDoppione(f, contoForn){
+  const nr = String(f.nr||'').trim();
+  const re = nr ? new RegExp('(^|[^\\d])'+nr.replace(/[.*+?^${}()|[\]\\\/]/g,'\\$&')+'([^\\d]|$)') : null;
+  const forn = _normNome(f.fornitore).split(' ')[0]||'';
+  const totC = Math.round(Math.abs(fpTot(f))*100);
+  return registrazioni.some(r=>{
+    if(r.soc!==f.soc || r.fatturaId) return false;
+    const txt = `${r.desc||''} ${r.rif||''} ${r.note||''}`;
+    if(re && re.test(txt) && forn.length>=3 && _normNome(txt).includes(forn)) return true;
+    return r.data===f.data && (r.righe||[]).some(g=>Math.round(Math.max(g.dare||0,g.avere||0)*100)===totC);
+  });
+}
+function apriModalContabilizzaPassive(){
+  const m = _cpMappa();
+  const inp = (k,f)=>`<input type="text" class="form-input" list="pdc-datalist" id="cp-${k}-${f}" value="${(m[k][f]||'').replace(/"/g,'&quot;')}" style="font-size:11px;padding:3px 6px" onchange="cpRicalcola()">`;
+  document.getElementById('cp-mappa').innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>Società</th><th>Conto di costo</th><th>IVA a credito</th><th>IVA detraibile %</th></tr></thead>
+    <tbody>${SOC.map(k=>`<tr><td><b>${k}</b></td><td>${inp(k,'costo')}</td><td>${inp(k,'ivaCred')}</td>
+      <td><input type="number" min="0" max="100" step="1" class="form-input" id="cp-${k}-detr" value="${m[k].detr}" style="font-size:11px;padding:3px 6px;max-width:90px" onchange="cpRicalcola()"></td></tr>`).join('')}
+    <tr><td><b>Conti fornitori</b></td><td colspan="3"><input type="text" class="form-input" list="pdc-datalist" id="cp-gruppo" value="${(m.gruppo||'').replace(/"/g,'&quot;')}" style="font-size:11px;padding:3px 6px" onchange="cpRicalcola()"> <span style="font-size:10px;color:var(--text3)">gruppo sotto cui creare i sottoconti dei fornitori mancanti</span></td></tr></tbody></table></div>
+    <div style="font-size:10.5px;color:var(--text3);margin-top:.3rem">IVA detraibile: valori di partenza <b>da verificare con il commercialista</b> (Virtus 100% · Dinamo e Invicta 0%, la quota non detraibile resta nel costo).</div>`;
+  document.getElementById('cp-esito').textContent = '';
+  _cpRighe = fatturePassive.map(f=>({f, sel:null}));
+  cpRicalcola(true);
+  apriModal('modal-contabilizza-passive');
+}
+function cpRicalcola(primo){
+  const mappa = _cpLeggiMappa();
+  try{ localStorage.setItem(CP_MAP_KEY, JSON.stringify(mappa)); }catch(e){}
+  const gruppo = _ctContoDaTesto(mappa.gruppo);
+  _cpRighe.forEach(r=>{
+    const f = r.f; r.errori = [];
+    r.cf = _cpContoFornitore(f);
+    r.chiaveNuovo = _normNome(f.fornitore)||(f.fornitore||'');
+    if(!r.cf && !gruppo) r.errori.push('gruppo conti fornitori non valido');
+    if(!SOC.includes(f.soc)) r.errori.push('società non riconosciuta');
+    const detr = mappa[f.soc]?.detr ?? 0;
+    r.calc = _cpCalcola(f, detr);
+    r.cCosto = _cpRisolviCosto(f.soc, mappa);
+    if(!r.cCosto) r.errori.push('conto di costo non valido');
+    r.cIva = _ctContoDaTesto(mappa[f.soc]?.ivaCred);
+    if(!r.cIva && r.calc.ivaDet) r.errori.push('conto IVA a credito non valido');
+    if(registrazioni.some(g=>g.fatturaId===f.id)){ r.stato='Già registrata'; r.sel=false; r.bloccata=true; return; }
+    r.bloccata = r.errori.length>0;
+    if(r.bloccata){ r.stato='Errore: '+r.errori.join(', '); r.sel=false; return; }
+    if(_cpPossibileDoppione(f, r.cf?.id)){ r.stato='Possibile doppione (già in Prima Nota?)'; if(r.sel===null||primo) r.sel=false; return; }
+    r.stato='Da registrare'; if(r.sel===null||primo) r.sel=true;
+  });
+  _cpRighe.sort((a,b)=>(a.f.soc||'').localeCompare(b.f.soc||'')||(a.f.data||'').localeCompare(b.f.data||'')||(a.f.nr||'').localeCompare(b.f.nr||'','it',{numeric:true}));
+  cpRender();
+}
+function cpToggle(i, v){ _cpRighe[i].sel = v; cpRender(); }
+function cpToggleTutte(v){ _cpRighe.forEach(r=>{ if(!r.bloccata) r.sel = v; }); cpRender(); }
+function cpRender(){
+  const e = x=>fmt(x/100);
+  const lab = c=>c?(c.daCreare?c.id+'*':c.id):'?';
+  const sel = _cpRighe.filter(r=>r.sel);
+  const selNuovi = new Set(sel.filter(r=>!r.cf).map(r=>r.chiaveNuovo));
+  document.getElementById('cp-preview').innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th><input type="checkbox" onchange="cpToggleTutte(this.checked)" title="Seleziona/deseleziona tutte"></th><th>Soc.</th><th>Nr.</th><th>Data</th><th>Fornitore</th><th style="text-align:right">Totale</th><th>Scrittura (D = dare · A = avere)</th><th>Stato</th></tr></thead>
+    <tbody>${_cpRighe.map((r,i)=>{
+      const f=r.f, c=r.calc, forn = r.cf?r.cf.id:'<i>nuovo conto</i>';
+      const D = c.neg?'A':'D', A = c.neg?'D':'A';
+      const rr = [];
+      if(c.costo) rr.push(`${D} ${lab(r.cCosto)} ${e(c.costo)}${c.ivaInd?` (di cui IVA indetraibile ${e(c.ivaInd)})`:''}`);
+      if(c.ivaDet) rr.push(`${D} ${lab(r.cIva)} ${e(c.ivaDet)} (IVA ${c.detr}%)`);
+      rr.push(`${A} ${forn} ${e(c.tot)}`);
+      return `<tr style="${r.bloccata?'opacity:.5':''}"><td><input type="checkbox" ${r.sel?'checked':''} ${r.bloccata?'disabled':''} onchange="cpToggle(${i},this.checked)"></td>
+      <td>${f.soc}</td><td style="font-weight:600">${f.nr||'—'}${c.neg?' <span style="font-weight:400;color:var(--rosso)">(NC)</span>':''}</td><td style="white-space:nowrap">${fmtData(f.data)}</td><td>${f.fornitore||'—'}</td>
+      <td class="num">${fmt(fpTot(f))}</td><td style="font-size:10.5px;line-height:1.35">${rr.join('<br>')}</td><td style="font-size:11px">${r.stato}</td></tr>`;}).join('')}
+    </tbody></table></div>`;
+  const nNc = sel.filter(r=>r.calc.neg).length;
+  document.getElementById('cp-esito').innerHTML = `Selezionate <b>${sel.length}</b> su ${_cpRighe.length} · totale ${e(sel.reduce((a,r)=>a+r.calc.tot,0))} · nuovi sottoconti fornitori da creare: <b>${selNuovi.size}</b>${nNc?` · note di credito (storno): ${nNc}`:''}`;
+  document.getElementById('cp-btn').disabled = !sel.length;
+  document.getElementById('cp-btn').textContent = sel.length ? `Registra ${sel.length} scritture` : 'Registra';
+  const nGen = registrazioni.filter(g=>g.origine==='fatture-passive').length;
+  document.getElementById('cp-annulla').textContent = nGen ? `Elimina le ${nGen} registrazioni generate da Fatture Passive` : '';
+}
+async function eseguiContabilizzaPassive(){
+  const sel = _cpRighe.filter(r=>r.sel && !r.bloccata);
+  if(!sel.length) return;
+  const mappa = _cpLeggiMappa();
+  const gruppo = _ctContoDaTesto(mappa.gruppo);
+  if(!confirm(`Creare ${sel.length} registrazioni in Prima Nota? Potrai eliminarle in blocco dal pulsante in basso a sinistra di questa finestra.`)) return;
+  try{
+    // 1) conto di costo generico 4.8.1 (e gruppo 4.8) se mancano
+    if(sel.some(r=>r.cCosto?.daCreare) && !pianoConti.find(c=>c.codice==='4.8.1')){
+      if(!pianoConti.find(c=>c.codice==='4.8'))
+        pianoConti.push({id:'4.8', codice:'4.8', nome:'Da classificare', classe:4, tipo:'gruppo', padre:'4', note:'Creato da Fatture Passive'});
+      pianoConti.push({id:'4.8.1', codice:'4.8.1', nome:'Costi generici da classificare', classe:4, tipo:'conto', padre:'4.8', note:'Creato da Fatture Passive: da riclassificare a mano'});
+    }
+    // 2) sottoconti fornitori mancanti (uno per fornitore)
+    const creati = new Map(), usati = new Set();
+    const tipoFiglio = pianoConti.find(c=>c.padre===gruppo?.id)?.tipo || 'conto';
+    for(const r of sel){
+      if(r.cf || creati.has(r.chiaveNuovo)) continue;
+      const code = _ctNuovoCodice(gruppo.id, usati); usati.add(code);
+      pianoConti.push({id:code, codice:code, nome:(r.f.fornitore||'').trim(), classe:2, tipo:tipoFiglio, padre:gruppo.id, note:'Creato da Fatture Passive'});
+      creati.set(r.chiaveNuovo, code);
+    }
+    // 3) registrazioni
+    let n = 0;
+    for(const r of sel){
+      const f = r.f, c = r.calc;
+      const forn = r.cf ? r.cf.id : creati.get(r.chiaveNuovo);
+      const D = c.neg?'avere':'dare', A = c.neg?'dare':'avere';
+      const riga = (lato, contoId, cent)=>({ tipo:lato, contoId, dare:lato==='dare'?cent/100:0, avere:lato==='avere'?cent/100:0 });
+      const righe = [];
+      if(c.costo) righe.push(riga(D, r.cCosto.id, c.costo));
+      if(c.ivaDet) righe.push(riga(D, r.cIva.id, c.ivaDet));
+      righe.push(riga(A, forn, c.tot));
+      const td = righe.reduce((a,x)=>a+Math.round(x.dare*100),0), ta = righe.reduce((a,x)=>a+Math.round(x.avere*100),0);
+      if(td!==ta) throw new Error(`Scrittura non in equilibrio per la fattura ${f.nr}`);
+      registrazioni.push({
+        id: genId(), data: f.data, soc: f.soc,
+        desc: `${c.neg?'Nota di credito':'Fattura'} ${f.nr} — ${f.fornitore}`,
+        rif: `Fatt. acq. ${f.nr}`, note: 'Generata da Fatture Passive — costo generico da riclassificare', scadenza: null,
+        righe, creatoIl: new Date().toISOString(), origine: 'fatture-passive', fatturaId: f.id
+      });
+      n++;
+    }
+    pianoConti.sort((a,b)=>a.codice?.localeCompare(b.codice));
+    aggiornaDatalist();
+    if(document.getElementById('page-primanota')?.classList.contains('active')) renderPrimaNota();
+    await (window.salvaEAggiorna && window.salvaEAggiorna());
+    document.getElementById('cp-esito').innerHTML = `✅ Registrate <b>${n}</b> scritture${creati.size?` e creati ${creati.size} sottoconti fornitori`:''}.`;
+    _cpRighe.forEach(r=>{ if(r.sel) r.sel=false; });
+    cpRicalcola();
+    buildFatturePassive();
+  }catch(e){
+    alert('Errore: '+e.message+'\nControlla la Prima Nota prima di riprovare: alcune scritture potrebbero essere già state aggiunte in memoria.');
+    cpRicalcola();
+  }
+}
+async function annullaContabilizzazionePassive(){
+  const gen = registrazioni.filter(g=>g.origine==='fatture-passive');
+  if(!gen.length) return;
+  if(!confirm(`Eliminare ${gen.length} registrazioni generate da Fatture Passive? Eventuali riclassificazioni fatte a mano su di esse andranno perse. I sottoconti fornitori creati restano nel piano dei conti.`)) return;
+  const ids = new Set(gen.map(g=>g.id));
+  registrazioni = registrazioni.filter(g=>!ids.has(g.id));
+  scadenzario = scadenzario.filter(x=>!ids.has(x.regId));
+  pianiRateazione = pianiRateazione.filter(x=>!ids.has(x.regId));
+  if(document.getElementById('page-primanota')?.classList.contains('active')) renderPrimaNota();
+  await (window.salvaEAggiorna && window.salvaEAggiorna());
+  cpRicalcola(true);
+  buildFatturePassive();
+}
+
 // ── CONTRATTI ──
 async function caricaContrattiDoc(){
   try{
@@ -5883,7 +6562,7 @@ async function salvaContrattoPDF(){
 // ── APRI PDF ──
 async function apriPDF(id, tipo){
   try{
-    const ref  = tipo==='fattura' ? FA_REF().doc(id) : CON_REF().doc(id);
+    const ref  = tipo==='fattura' ? FA_REF().doc(id) : tipo==='passiva' ? FP_REF().doc(id) : CON_REF().doc(id);
     const snap = await ref.get();
     if(!snap.exists){ alert('Documento non trovato.'); return; }
     let b64 = await leggiPDFaChunk(ref, snap);
