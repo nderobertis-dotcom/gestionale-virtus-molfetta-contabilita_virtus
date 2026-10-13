@@ -62,6 +62,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .metric{background:var(--bg2);border-radius:var(--radius);padding:.8rem 1rem;border:.5px solid var(--border)}
 .metric-label{font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem}
 .metric-value{font-size:20px;font-weight:800;color:var(--text1)}
+.metrics-6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.metrics-3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .metric-value.dare{color:var(--dare)}
 .metric-value.avere{color:var(--avere)}
 
@@ -206,7 +208,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
   .page{padding:.8rem;padding-top:3.2rem}
   .two-col,.three-col{grid-template-columns:1fr}
   .modal{width:96vw;padding:1rem}
-  .metrics{grid-template-columns:1fr 1fr}
+  .metrics,.metrics-6,.metrics-3{grid-template-columns:1fr 1fr}
 }
 
 @media print{
@@ -380,7 +382,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           </div>
         </div>
       </div>
-      <div class="metrics" id="fa-metrics"></div>
+      <div id="fa-metrics"></div>
       <div id="fa-avviso"></div>
       <div id="fa-clienti" style="margin-bottom:1rem"></div>
       <div class="toolbar no-print">
@@ -4694,18 +4696,31 @@ function buildFattureAttive(){
   const _totNetto = _sum(lista,f=>importoMgr(f));
   const _totIvaDeb = _sum(lista,f=>ivaDebito(f));
   const _soc = k=>_sum(_I.filter(x=>x.f.soc===k),x=>x.i.tot);
+  const _quotaTot = _sum(lista,f=>quotaIvaMgr(f));
+  const _mgrImp = Math.round((_totNetto-_quotaTot)*100)/100;
+  const _sub = t=>`<div style="font-size:11px;color:var(--text2);margin-top:.25rem">${t}</div>`;
+  const _socCard = (k,lab)=>{
+    const L = lista.filter(f=>f.soc===k);
+    const tot = _sum(L,f=>fatturaImporti(f).tot), mgr = _sum(L,f=>importoMgr(f)), q = _sum(L,f=>quotaIvaMgr(f));
+    return `<div class="metric"><div class="metric-label">${lab}</div><div class="metric-value">${fmt(tot)}</div>
+      ${_sub(`Importo MGR <b>${fmt(mgr)}</b>`)}
+      ${q?_sub(`da imponibile ${fmt(Math.round((mgr-q)*100)/100)} · da IVA 50% <b>${fmt(q)}</b>`):_sub(`IVA a debito 100%: ${fmt(_sum(L,f=>ivaDebito(f)))}`)}</div>`;
+  };
   const _m = document.getElementById('fa-metrics');
   if(_m) _m.innerHTML = `
-    <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div></div>
-    <div class="metric"><div class="metric-label">Imponibile</div><div class="metric-value">${fmt(_totImp)}</div></div>
-    <div class="metric"><div class="metric-label">IVA</div><div class="metric-value">${fmt(_totIva)}</div></div>
-    <div class="metric"><div class="metric-label">IVA a debito</div><div class="metric-value">${fmt(_totIvaDeb)}</div></div>
-    <div class="metric"><div class="metric-label">Totale fatturato</div><div class="metric-value">${fmt(_totTot)}</div></div>
-    <div class="metric"><div class="metric-label">Importo MGR</div><div class="metric-value">${fmt(_totNetto)}</div>
-      <div style="font-size:13px;font-weight:700;color:var(--rosso);margin-top:.2rem" title="Importo MGR ÷ totale imponibile">${_totImp?(_totNetto/_totImp*100).toFixed(2).replace('.',',')+'%':'—'} <span style="font-weight:400;font-size:10px">del totale imponibile</span></div></div>
-    <div class="metric"><div class="metric-label">Virtus (totale)</div><div class="metric-value">${fmt(_soc('VIRTUS'))}</div></div>
-    <div class="metric"><div class="metric-label">Dinamo (totale)</div><div class="metric-value">${fmt(_soc('DINAMO'))}</div></div>
-    <div class="metric"><div class="metric-label">Invicta (totale)</div><div class="metric-value">${fmt(_soc('INVICTA'))}</div></div>`;
+    <div class="metrics metrics-6">
+      <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div></div>
+      <div class="metric"><div class="metric-label">Imponibile</div><div class="metric-value">${fmt(_totImp)}</div></div>
+      <div class="metric"><div class="metric-label">IVA</div><div class="metric-value">${fmt(_totIva)}</div></div>
+      <div class="metric"><div class="metric-label">IVA a debito</div><div class="metric-value">${fmt(_totIvaDeb)}</div>${_sub(`IVA 50% Dinamo/Invicta → MGR: <b>${fmt(_quotaTot)}</b>`)}</div>
+      <div class="metric"><div class="metric-label">Totale fatturato</div><div class="metric-value">${fmt(_totTot)}</div></div>
+      <div class="metric"><div class="metric-label">Importo MGR</div><div class="metric-value">${fmt(_totNetto)}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--rosso);margin-top:.2rem" title="Importo MGR ÷ totale imponibile">${_totImp?(_totNetto/_totImp*100).toFixed(2).replace('.',',')+'%':'—'} <span style="font-weight:400;font-size:10px">del totale imponibile</span></div>
+        ${_sub(`da imponibile ${fmt(_mgrImp)}`)}${_sub(`da IVA 50% <b>${fmt(_quotaTot)}</b>`)}</div>
+    </div>
+    <div class="metrics metrics-3">
+      ${_socCard('VIRTUS','Virtus (totale)')}${_socCard('DINAMO','Dinamo (totale)')}${_socCard('INVICTA','Invicta (totale)')}
+    </div>`;
   // Clienti senza sponsor abbinato in CRM (MGR considerato 0)
   const _senzaSp = [...new Set(lista.filter(f=>!sponsorPerFattura(f) && !mgrFattura(f).manuale).map(f=>(f.cliente||'—').trim()))];
   const _avv = document.getElementById('fa-avviso');
