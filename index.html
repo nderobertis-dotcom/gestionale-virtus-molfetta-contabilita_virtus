@@ -4591,6 +4591,13 @@ function buildFattureAttive(){
     return true;
   });
 
+  // Ordinamento: data di emissione (più recente prima), poi numero fattura (confronto numerico naturale)
+  lista.sort((x,y)=>{
+    const d = (y.data||'').localeCompare(x.data||'');
+    if(d) return d;
+    return (y.nr||'').localeCompare(x.nr||'', 'it', {numeric:true});
+  });
+
   // Card di riepilogo (rispettano i filtri attivi)
   const _tot = lista.reduce((a,f)=>a+(parseFloat(f.importo)||0),0);
   const _soc = k=>lista.filter(f=>f.soc===k).reduce((a,f)=>a+(parseFloat(f.importo)||0),0);
