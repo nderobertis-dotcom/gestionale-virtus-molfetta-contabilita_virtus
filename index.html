@@ -379,6 +379,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           </div>
         </div>
       </div>
+      <div class="metrics" id="fa-metrics"></div>
       <div class="toolbar no-print">
         <select id="fa-filter-soc" class="form-input" style="width:auto" onchange="buildFattureAttive()">
           <option value="">Tutte le società</option>
@@ -4587,6 +4588,18 @@ function buildFattureAttive(){
     if(search   && !f.cliente?.toLowerCase().includes(search) && !f.nr?.toLowerCase().includes(search)) return false;
     return true;
   });
+
+  // Card di riepilogo (rispettano i filtri attivi)
+  const _tot = lista.reduce((a,f)=>a+(parseFloat(f.importo)||0),0);
+  const _soc = k=>lista.filter(f=>f.soc===k).reduce((a,f)=>a+(parseFloat(f.importo)||0),0);
+  const _senzaImp = lista.filter(f=>!(parseFloat(f.importo)>0)).length;
+  const _m = document.getElementById('fa-metrics');
+  if(_m) _m.innerHTML = `
+    <div class="metric"><div class="metric-label">Fatture${(filtSoc||filtAnno||search)?' (filtrate)':''}</div><div class="metric-value">${lista.length}</div>${_senzaImp?`<div style="font-size:10px;color:var(--text3)">${_senzaImp} senza importo</div>`:''}</div>
+    <div class="metric"><div class="metric-label">Totale fatturato</div><div class="metric-value">${fmt(_tot)}</div></div>
+    <div class="metric"><div class="metric-label">Virtus</div><div class="metric-value">${fmt(_soc('VIRTUS'))}</div></div>
+    <div class="metric"><div class="metric-label">Dinamo</div><div class="metric-value">${fmt(_soc('DINAMO'))}</div></div>
+    <div class="metric"><div class="metric-label">Invicta</div><div class="metric-value">${fmt(_soc('INVICTA'))}</div></div>`;
 
   const cont = document.getElementById('fa-container');
   if(!cont) return;
