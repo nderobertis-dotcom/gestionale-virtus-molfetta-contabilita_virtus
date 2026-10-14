@@ -3887,7 +3887,7 @@ async function cambiaRuoloUtente(uid,ruolo){
     <div class="modal-title">📒 Contabilizza fatture passive in Prima Nota</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">
       Dare: conto di costo generico (imponibile + eventuale IVA indetraibile) e IVA a credito (quota detraibile). Avere: fornitore per il totale fattura.
-      Il costo va su <b>4.8.1 Costi generici da classificare</b>: potrai poi girarlo sui conti corretti dalla Prima Nota. Le note di credito vengono registrate a storno.
+      Il costo va sul conto <b>Costi generici da classificare</b> (creato con un codice libero se non esiste): potrai poi girarlo sui conti corretti dalla Prima Nota. Le note di credito vengono registrate a storno.
     </div>
     <div id="cp-mappa" style="margin-bottom:.6rem"></div>
     <div class="toolbar" style="margin-bottom:.5rem">
@@ -6183,12 +6183,23 @@ async function eseguiImportXmlPassive(){
 // ── CONTABILIZZAZIONE IN PRIMA NOTA ──
 // Dare: costo generico (imponibile + IVA indetraibile + eventuali extra tipo bollo) · Dare: IVA a credito (quota detraibile)
 // Avere: fornitore per il totale documento. Note di credito: stesse righe a lati invertiti.
-const CP_MAP_KEY = 'cp_map_v1';
-const CP_COSTO_DEFAULT = '4.8.1 — Costi generici da classificare';
+const CP_MAP_KEY = 'cp_map_v2';
+const CP_NOME_GENERICO = 'Costi generici da classificare';
+// Il conto generico si riconosce dal NOME, mai dal codice: nel piano dei conti reale un codice come 4.8.1 può essere già usato per altro.
+function _cpContoGenerico(){ return pianoConti.find(c=>(c.nome||'').trim().toLowerCase()===CP_NOME_GENERICO.toLowerCase() && c.tipo!=='gruppo' && c.tipo!=='classe') || null; }
+function _cpCodiciGenerico(){
+  // gruppo "Da classificare" se esiste, altrimenti primo codice 4.N libero; conto = primo sottocodice libero
+  let g = pianoConti.find(c=>c.classe===4 && c.tipo==='gruppo' && (c.nome||'').trim().toLowerCase()==='da classificare');
+  let grp = g ? g.codice : null;
+  if(!grp){ for(let n=8;n<100;n++){ if(!pianoConti.some(c=>c.codice==='4.'+n||c.id==='4.'+n)){ grp='4.'+n; break; } } }
+  let conto=null; for(let n=1;n<1000;n++){ const k=grp+'.'+n; if(!pianoConti.some(c=>c.codice===k||c.id===k)){ conto=k; break; } }
+  return {grp, grpEsiste:!!g, conto};
+}
+function _cpEtichettaGenerico(){ const g=_cpContoGenerico(); return g?_ctLab(g):`${_cpCodiciGenerico().conto} — ${CP_NOME_GENERICO}`; }
 let _cpRighe = [];
 function _cpMappaDefault(){
   const cod = c=>pianoConti.find(x=>x.codice===c);
-  const costo = _ctLab(cod('4.8.1')) || CP_COSTO_DEFAULT;
+  const costo = _cpEtichettaGenerico();
   const ivaCred = _ctLab(cod('1.2.2'));
   // IVA detraibile: ipotesi di partenza (modificabile) — Virtus regime ordinario 100%; Dinamo/Invicta (regime 398/91) nessuna detrazione analitica
   return {
@@ -6200,10 +6211,14 @@ function _cpMappaDefault(){
 }
 function _cpMappa(){
   const out = _cpMappaDefault(); let saved = null;
-  try{ saved = JSON.parse(localStorage.getItem(CP_MAP_KEY)||'null'); }catch(e){}
+  try{
+    saved = JSON.parse(localStorage.getItem(CP_MAP_KEY)||'null');
+    // migrazione dal salvataggio v1: il conto di costo salvato poteva essere l'errato "4.8.1 — Abbigliamento sportivo", si scarta; restano IVA e gruppo
+    if(!saved){ const v1 = JSON.parse(localStorage.getItem('cp_map_v1')||'null'); if(v1){ for(const k of SOC) if(v1[k]) delete v1[k].costo; saved = v1; } }
+  }catch(e){}
   if(saved){
     for(const k of SOC){
-      if(saved[k]?.costo && (_ctContoDaTesto(saved[k].costo) || /^4\.8\.1\b/.test(saved[k].costo))) out[k].costo = saved[k].costo;
+      if(saved[k]?.costo && _ctContoDaTesto(saved[k].costo) ) out[k].costo = saved[k].costo;
       if(saved[k]?.ivaCred && _ctContoDaTesto(saved[k].ivaCred)) out[k].ivaCred = saved[k].ivaCred;
       if(typeof saved[k]?.detr==='number' && saved[k].detr>=0 && saved[k].detr<=100) out[k].detr = saved[k].detr;
     }
@@ -6222,9 +6237,15 @@ function _cpLeggiMappa(){
   return m;
 }
 function _cpRisolviCosto(soc, mappa){
-  const t = mappa[soc]?.costo, c = _ctContoDaTesto(t);
+  const t = (mappa[soc]?.costo||'').trim();
+  // scelta esplicita di un conto esistente (per etichetta completa, codice o id)
+  const c = _ctContoDaTesto(t);
   if(c) return {id:c.id};
-  if(/^4\.8\.1\b/.test(t||'')) return {id:'4.8.1', daCreare:true};
+  // testo del conto generico (anche con un codice vecchio/non più valido): si usa il conto per nome o lo si crea con un codice libero
+  if(t.toLowerCase().includes(CP_NOME_GENERICO.toLowerCase())){
+    const g = _cpContoGenerico();
+    return g ? {id:g.id} : {id:_cpCodiciGenerico().conto, daCreare:true};
+  }
   return null;
 }
 // Conto fornitore: conto di classe 2 senza figli (esclusi i debiti tributari 2.4) con lo stesso nome del fornitore
@@ -6338,11 +6359,12 @@ async function eseguiContabilizzaPassive(){
   const gruppo = _ctContoDaTesto(mappa.gruppo);
   if(!confirm(`Creare ${sel.length} registrazioni in Prima Nota? Potrai eliminarle in blocco dal pulsante in basso a sinistra di questa finestra.`)) return;
   try{
-    // 1) conto di costo generico 4.8.1 (e gruppo 4.8) se mancano
-    if(sel.some(r=>r.cCosto?.daCreare) && !pianoConti.find(c=>c.codice==='4.8.1')){
-      if(!pianoConti.find(c=>c.codice==='4.8'))
-        pianoConti.push({id:'4.8', codice:'4.8', nome:'Da classificare', classe:4, tipo:'gruppo', padre:'4', note:'Creato da Fatture Passive'});
-      pianoConti.push({id:'4.8.1', codice:'4.8.1', nome:'Costi generici da classificare', classe:4, tipo:'conto', padre:'4.8', note:'Creato da Fatture Passive: da riclassificare a mano'});
+    // 1) conto di costo generico (e gruppo "Da classificare") se mancano: codici liberi, mai quelli di conti esistenti
+    if(sel.some(r=>r.cCosto?.daCreare) && !_cpContoGenerico()){
+      const k = _cpCodiciGenerico();
+      if(!k.grpEsiste)
+        pianoConti.push({id:k.grp, codice:k.grp, nome:'Da classificare', classe:4, tipo:'gruppo', padre:'4', note:'Creato da Fatture Passive'});
+      pianoConti.push({id:k.conto, codice:k.conto, nome:CP_NOME_GENERICO, classe:4, tipo:'conto', padre:k.grp, note:'Creato da Fatture Passive: da riclassificare a mano'});
     }
     // 2) sottoconti fornitori mancanti (uno per fornitore)
     const creati = new Map(), usati = new Set();
