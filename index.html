@@ -1240,6 +1240,10 @@ function apriModalPrimaNotaDaMastrini(){
 
 function openModalPrimaNota(id){
   _editRegId = id || null;
+  // Una registrazione aperta da qui NON è il saldo di una rata: azzera il riferimento rimasto
+  // da un precedente "Salda" annullato, altrimenti la rata vecchia verrebbe segnata come pagata
+  const _mpn = document.getElementById('modal-primanota');
+  _mpn.dataset.saldaRataId = ''; _mpn.dataset.saldaImporto = '';
   const reg = id ? registrazioni.find(r=>r.id===id) : null;
   document.getElementById('pn-data').value = reg ? reg.data : new Date().toISOString().slice(0,10);
   document.getElementById('pn-soc').value  = reg ? reg.soc : 'VIRTUS';
@@ -2018,14 +2022,19 @@ function apriModalRateazione(regId, contoId, override){
     document.getElementById('rate-prima-data').value = _righeRate[0]?.scadenza||'';
     renderRigheRate();
   } else {
+    // Piano nuovo: parte da zero. Prima _righeRate conservava le rate del piano aperto in precedenza
+    // (stessi id, importi saldati e stato), e generaRigheRate() le riproponeva nel piano nuovo.
+    _righeRate = [];
     const nRate = 1;
     const oggi = new Date().toISOString().slice(0,10);
     document.getElementById('rate-numero').value = nRate;
     document.getElementById('rate-prima-data').value = oggi;
+    const cad0 = document.getElementById('rate-cadenza'); if(cad0) cad0.value = '1';
+    ['bulk-rate-giorni','bulk-rate-importo'].forEach(x=>{ const e=document.getElementById(x); if(e) e.value=''; });
     generaRigheRate();
   }
   const cadField = document.getElementById('rate-cadenza');
-  if(cadField) cadField.value = '1';
+  if(cadField && pianoEsistente) cadField.value = '1';
   const impField = document.getElementById('rate-importo-override');
   if(impField) impField.value = importoTot||'';
   apriModal('modal-rateazione');
