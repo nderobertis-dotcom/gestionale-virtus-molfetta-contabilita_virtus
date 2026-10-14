@@ -1349,6 +1349,7 @@ async function salvaPrimaNota(){
 
   chiudiModal('modal-primanota');
   renderPrimaNota();
+  if(document.getElementById('page-mastrini')?.classList.contains('active')) buildMastrini();
   window.salvaEAggiorna && window.salvaEAggiorna();
 
   // Se stiamo saldando una rata, aggiorna lo stato scadenzario
@@ -1370,6 +1371,7 @@ async function salvaPrimaNota(){
     document.getElementById('modal-primanota').dataset.saldaImporto = '';
     if(window.salvaEAggiorna) await window.salvaEAggiorna();
     buildScadenzario();
+    if(document.getElementById('page-mastrini')?.classList.contains('active')) buildMastrini();
   }
   // Offri piano rateazione per conti crediti/debiti (solo nuove registrazioni,
   // e solo se non stiamo saldando una rata già esistente — in quel caso non ha senso
@@ -2065,12 +2067,17 @@ function renderRigheRate(){
     const stato = r.saldato>=(r.importo-0.01)?'saldata':r.scadenza&&r.scadenza.slice(0,7)<meseCorr?'scaduta':r.scadenza&&r.scadenza.slice(0,7)===meseCorr?'corrente':'futura';
     const statoBg = {saldata:'#E8F5E9',scaduta:'#FFEBEE',corrente:'#FFFDE7',futura:'#E3F2FD'};
     const statoClr = {saldata:'var(--ricavo)',scaduta:'var(--costo)',corrente:'#F57F17',futura:'#1565C0'};
-    return `<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:.3rem;margin-bottom:.25rem;align-items:center;background:${statoBg[stato]};border-radius:4px;padding:2px .2rem">
+    const residuoR = Math.round(((parseFloat(r.importo)||0)-(r.saldato||0))*100)/100;
+    const azione = stato==='saldata'
+      ? `<div style="font-size:9px;font-weight:700;text-align:center;color:var(--ricavo)" title="${r.dataPagamento?'Pagata il '+fmtData(r.dataPagamento):''}">✅ saldata${r.dataPagamento?'<br><span style="font-weight:400">'+fmtData(r.dataPagamento)+'</span>':''}</div>`
+      : `<button class="btn btn-dark" style="font-size:10px;padding:3px 6px;white-space:nowrap" title="Registra il ${_rateContext?.tipo==='incasso'?'incasso':'pagamento'} di questa rata in Prima Nota${r.saldato?' (residuo '+fmt(residuoR)+')':''}" onclick="saldaRataDaModal(${i})">📒 Salda${r.saldato?' *':''}</button>`;
+    return `<div style="display:grid;grid-template-columns:28px 1fr 1fr 96px 28px;gap:.3rem;margin-bottom:.25rem;align-items:center;background:${statoBg[stato]};border-radius:4px;padding:2px .2rem">
       <div style="font-size:10px;font-weight:700;text-align:center;color:var(--text2)">${i+1}</div>
       <input type="date" class="form-input" value="${r.scadenza||''}" style="font-size:11px;padding:4px 6px"
         onchange="_righeRate[${i}].scadenza=this.value;verificaTotaleRate()">
       <input type="number" class="form-input" value="${r.importo||''}" style="font-size:11px;padding:4px 6px;text-align:right"
         onchange="_righeRate[${i}].importo=parseFloat(this.value)||0;verificaTotaleRate()">
+      ${azione}
       <button class="btn-del" style="padding:1px 5px;font-size:10px" onclick="_righeRate.splice(${i},1);renderRigheRate()" title="Rimuovi rata">✕</button>
     </div>`;
   }).join('');
@@ -2091,7 +2098,15 @@ function verificaTotaleRate(){
 }
 
 function salvaRateazione(){
-  if(!_rateContext) return;
+  if(!_persistiPianoDaModal()) return;
+  chiudiModal('modal-rateazione');
+  buildScadenzario();
+  buildMastrini();
+}
+
+// Scrive il piano (così com'è nel modal) nei dati e nello scadenzario; ritorna il piano salvato
+function _persistiPianoDaModal(){
+  if(!_rateContext) return null;
   const {regId, contoId, tipo, soc, desc} = _rateContext;
   const idx = pianiRateazione.findIndex(p=>p.regId===regId&&p.contoId===contoId);
   const piano = {
@@ -2104,11 +2119,26 @@ function salvaRateazione(){
 
   // Aggiorna scadenzario
   aggiornaSacadenzarioDaPiano(piano);
+  window.salvaEAggiorna && window.salvaEAggiorna();
+  return piano;
+}
 
+// Dal modal del piano: salva il piano e apre il saldo della rata scelta (→ registrazione in Prima Nota)
+function saldaRataDaModal(i){
+  const r = _righeRate[i];
+  if(!r) return;
+  if(!(parseFloat(r.importo)>0)){ alert('La rata deve avere un importo maggiore di zero.'); return; }
+  if(!r.scadenza){ alert('Imposta la scadenza della rata prima di registrarla.'); return; }
+  const tot = _righeRate.reduce((a,x)=>a+(parseFloat(x.importo)||0),0);
+  const atteso = _rateContext?.importoTot||0;
+  if(Math.abs(tot-atteso)>=0.01 && !confirm(`Il totale delle rate (${fmt(tot)}) è diverso dall'importo della registrazione (${fmt(atteso)}). Salvare comunque il piano e procedere?`)) return;
+  const piano = _persistiPianoDaModal();
+  if(!piano) return;
+  const rata = piano.rate[i];
   chiudiModal('modal-rateazione');
   buildScadenzario();
   buildMastrini();
-  window.salvaEAggiorna && window.salvaEAggiorna();
+  apriSaldaRata(rata.id);
 }
 
 function aggiornaSacadenzarioDaPiano(piano){
@@ -3489,10 +3519,11 @@ async function cambiaRuoloUtente(uid,ruolo){
       </div>
     </div>
     <div style="max-height:320px;overflow-y:auto">
-      <div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:.3rem;padding:.3rem .2rem;background:var(--bg);border-radius:4px;margin-bottom:.3rem">
+      <div style="display:grid;grid-template-columns:28px 1fr 1fr 96px 28px;gap:.3rem;padding:.3rem .2rem;background:var(--bg);border-radius:4px;margin-bottom:.3rem">
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-align:center">#</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2)">Scadenza</div>
         <div style="font-size:9px;font-weight:700;color:var(--text2);text-align:right">Importo €</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text2);text-align:center">Registra</div>
         <div></div>
       </div>
       <div id="rate-righe"></div>
