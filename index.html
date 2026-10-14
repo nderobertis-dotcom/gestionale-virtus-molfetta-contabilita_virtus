@@ -2177,12 +2177,29 @@ function aggiornaSacadenzarioDaPiano(piano){
 
 // Ripara nRata/totRate mancanti nello scadenzario usando i pianiRateazione
 function riparaNRata(){
-  // Deduplica ID duplicati nello scadenzario
-  const visti = new Set();
+  // Deduplica gli ID delle rate. Piani diversi possono avere rate con lo stesso id (le rate di un piano
+  // venivano riusate nel piano successivo): "Salda" cercava per id e apriva la rata del piano sbagliato.
+  // Ogni rata duplicata riceve un nuovo id, cambiato in modo coerente sia nel piano sia nella sua voce
+  // di scadenzario (stesso pianoId e vecchio id), così il legame rata ↔ scadenza resta corretto.
+  const visti = new Set(), voceFatta = new Set();
+  pianiRateazione.forEach(piano=>{
+    (piano.rate||[]).forEach(r=>{
+      if(r.id && !visti.has(r.id)){
+        visti.add(r.id);
+        const v = scadenzario.find(x=>x.pianoId===piano.id && x.id===r.id && !voceFatta.has(x));
+        if(v) voceFatta.add(v);
+        return;
+      }
+      const vecchio = r.id, nuovo = genId();
+      const voce = vecchio ? scadenzario.find(x=>x.pianoId===piano.id && x.id===vecchio && !voceFatta.has(x)) : null;
+      r.id = nuovo; visti.add(nuovo);
+      if(voce){ voce.id = nuovo; voceFatta.add(voce); }
+    });
+  });
+  // Le altre voci dello scadenzario (non legate a una rata) con id duplicato
   scadenzario.forEach(s=>{
-    if(visti.has(s.id)){
-      s.id = genId();
-    }
+    if(voceFatta.has(s)) return;
+    if(visti.has(s.id)) s.id = genId();
     visti.add(s.id);
   });
   // Ripara nRata/totRate mancanti
@@ -3167,6 +3184,7 @@ function importaBackup(event){
       if(b.bilancioApertura) bilancioApertura = b.bilancioApertura;
       if(b.scadenzario)   scadenzario    = b.scadenzario;
       if(b.pianiRateazione) pianiRateazione = b.pianiRateazione;
+      riparaNRata();
       await window.salvaDatiFirestore();
       if(Array.isArray(b.crmSponsor) && b.crmSponsor.length){
         if(confirm(`Il backup contiene ${b.crmSponsor.length} sponsor CRM. Ripristinare anche quelli (sovrascrivendo per ID)?`)){
@@ -3330,6 +3348,7 @@ window.avviaListenerDati = function(){
     if(d.bilancioApertura) bilancioApertura = d.bilancioApertura;
     if(d.scadenzario)      scadenzario      = d.scadenzario;
     if(d.pianiRateazione)  pianiRateazione  = d.pianiRateazione;
+    riparaNRata();
     buildHome();
     aggiornaDatalist();
   }, err=>console.error('Listener:',err.message));
