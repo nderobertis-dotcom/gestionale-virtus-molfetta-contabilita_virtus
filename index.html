@@ -3890,6 +3890,13 @@ async function cambiaRuoloUtente(uid,ruolo){
       Il costo va su <b>4.8.1 Costi generici da classificare</b>: potrai poi girarlo sui conti corretti dalla Prima Nota. Le note di credito vengono registrate a storno.
     </div>
     <div id="cp-mappa" style="margin-bottom:.6rem"></div>
+    <div class="toolbar" style="margin-bottom:.5rem">
+      <select id="cp-f-soc" class="form-input" style="width:auto" onchange="cpRender()"><option value="">Tutte le società</option><option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option></select>
+      <select id="cp-f-stato" class="form-input" style="width:auto" onchange="cpRender()"><option value="da">Da contabilizzare</option><option value="tutte">Tutte</option><option value="reg">Già registrate</option></select>
+      <input type="text" id="cp-f-q" class="form-input" placeholder="🔍 Fornitore o numero..." style="width:200px" oninput="cpRender()">
+      <button class="btn" onclick="cpToggleTutte(true)">☑ Seleziona quelle visibili</button>
+      <button class="btn" onclick="cpToggleTutte(false)">☐ Deseleziona quelle visibili</button>
+    </div>
     <div id="cp-preview" style="max-height:46vh;overflow:auto"></div>
     <div id="cp-esito" style="font-size:12px;color:var(--text2);margin:.6rem 0"></div>
     <div class="modal-actions" style="justify-content:space-between">
@@ -6259,6 +6266,7 @@ function apriModalContabilizzaPassive(){
     <div style="font-size:10.5px;color:var(--text3);margin-top:.3rem">IVA detraibile: valori di partenza <b>da verificare con il commercialista</b> (Virtus 100% · Dinamo e Invicta 0%, la quota non detraibile resta nel costo).</div>`;
   document.getElementById('cp-esito').textContent = '';
   _cpRighe = fatturePassive.map(f=>({f, sel:null}));
+  document.getElementById('cp-f-soc').value=''; document.getElementById('cp-f-stato').value='da'; document.getElementById('cp-f-q').value='';
   cpRicalcola(true);
   apriModal('modal-contabilizza-passive');
 }
@@ -6282,21 +6290,30 @@ function cpRicalcola(primo){
     r.bloccata = r.errori.length>0;
     if(r.bloccata){ r.stato='Errore: '+r.errori.join(', '); r.sel=false; return; }
     if(_cpPossibileDoppione(f, r.cf?.id)){ r.stato='Possibile doppione (già in Prima Nota?)'; if(r.sel===null||primo) r.sel=false; return; }
-    r.stato='Da registrare'; if(r.sel===null||primo) r.sel=true;
+    r.stato='Da registrare'; if(r.sel===null||primo) r.sel=false;  // nessuna preselezione: sceglie l'utente
   });
   _cpRighe.sort((a,b)=>(a.f.soc||'').localeCompare(b.f.soc||'')||(a.f.data||'').localeCompare(b.f.data||'')||(a.f.nr||'').localeCompare(b.f.nr||'','it',{numeric:true}));
   cpRender();
 }
 function cpToggle(i, v){ _cpRighe[i].sel = v; cpRender(); }
-function cpToggleTutte(v){ _cpRighe.forEach(r=>{ if(!r.bloccata) r.sel = v; }); cpRender(); }
+function _cpVisibile(r){
+  const fs=document.getElementById('cp-f-soc')?.value||'', st=document.getElementById('cp-f-stato')?.value||'da', q=(document.getElementById('cp-f-q')?.value||'').toLowerCase().trim();
+  if(fs && r.f.soc!==fs) return false;
+  if(st==='da' && r.stato==='Già registrata') return false;
+  if(st==='reg' && r.stato!=='Già registrata') return false;
+  if(q && !((r.f.fornitore||'')+' '+(r.f.nr||'')).toLowerCase().includes(q)) return false;
+  return true;
+}
+function cpToggleTutte(v){ _cpRighe.forEach(r=>{ if(!r.bloccata && _cpVisibile(r)) r.sel = v; }); cpRender(); }
 function cpRender(){
   const e = x=>fmt(x/100);
   const lab = c=>c?(c.daCreare?c.id+'*':c.id):'?';
   const sel = _cpRighe.filter(r=>r.sel);
   const selNuovi = new Set(sel.filter(r=>!r.cf).map(r=>r.chiaveNuovo));
   document.getElementById('cp-preview').innerHTML = `<div class="tbl-wrap"><table>
-    <thead><tr><th><input type="checkbox" onchange="cpToggleTutte(this.checked)" title="Seleziona/deseleziona tutte"></th><th>Soc.</th><th>Nr.</th><th>Data</th><th>Fornitore</th><th style="text-align:right">Totale</th><th>Scrittura (D = dare · A = avere)</th><th>Stato</th></tr></thead>
+    <thead><tr><th><input type="checkbox" onchange="cpToggleTutte(this.checked)" title="Seleziona/deseleziona le righe visibili"></th><th>Soc.</th><th>Nr.</th><th>Data</th><th>Fornitore</th><th style="text-align:right">Totale</th><th>Scrittura (D = dare · A = avere)</th><th>Stato</th></tr></thead>
     <tbody>${_cpRighe.map((r,i)=>{
+      if(!_cpVisibile(r)) return '';
       const f=r.f, c=r.calc, forn = r.cf?r.cf.id:'<i>nuovo conto</i>';
       const D = c.neg?'A':'D', A = c.neg?'D':'A';
       const rr = [];
@@ -6308,7 +6325,7 @@ function cpRender(){
       <td class="num">${fmt(fpTot(f))}</td><td style="font-size:10.5px;line-height:1.35">${rr.join('<br>')}</td><td style="font-size:11px">${r.stato}</td></tr>`;}).join('')}
     </tbody></table></div>`;
   const nNc = sel.filter(r=>r.calc.neg).length;
-  document.getElementById('cp-esito').innerHTML = `Selezionate <b>${sel.length}</b> su ${_cpRighe.length} · totale ${e(sel.reduce((a,r)=>a+r.calc.tot,0))} · nuovi sottoconti fornitori da creare: <b>${selNuovi.size}</b>${nNc?` · note di credito (storno): ${nNc}`:''}`;
+  document.getElementById('cp-esito').innerHTML = `Selezionate <b>${sel.length}</b> su ${_cpRighe.filter(r=>!r.bloccata).length} registrabili${sel.some(r=>!_cpVisibile(r))?` (<span style="color:var(--rosso)">${sel.filter(r=>!_cpVisibile(r)).length} fuori dal filtro attuale</span>)`:''} · totale ${e(sel.reduce((a,r)=>a+r.calc.tot,0))} · nuovi sottoconti fornitori da creare: <b>${selNuovi.size}</b>${nNc?` · note di credito (storno): ${nNc}`:''}`;
   document.getElementById('cp-btn').disabled = !sel.length;
   document.getElementById('cp-btn').textContent = sel.length ? `Registra ${sel.length} scritture` : 'Registra';
   const nGen = registrazioni.filter(g=>g.origine==='fatture-passive').length;
