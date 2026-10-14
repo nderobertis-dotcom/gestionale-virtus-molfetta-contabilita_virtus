@@ -360,6 +360,12 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
             <div style="font-size:15px;font-weight:800;color:#7A1F3D">Fatture Passive</div>
             <div style="font-size:11px;color:var(--text2);margin-top:.4rem">Archivio fatture di acquisto</div>
           </div>
+          <!-- REGISTRO MOVIMENTI -->
+          <div onclick="apriModulo('prima-nota-reg')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#2F5D8A';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
+            <div style="font-size:2.5rem;margin-bottom:.8rem">✍️</div>
+            <div style="font-size:15px;font-weight:800;color:#2F5D8A">Registro Movimenti</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:.4rem">8 causali · autonomo dalla Contabilità</div>
+          </div>
           <!-- CONTRATTI -->
           <div onclick="apriModulo('contratti-doc')" style="cursor:pointer;background:#fff;border-radius:16px;border:2px solid var(--border);padding:2rem 1.5rem;text-align:center;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.06)" onmouseover="this.style.borderColor='#6B3A00';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">
             <div style="font-size:2.5rem;margin-bottom:.8rem">📄</div>
@@ -436,6 +442,32 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
         <button class="btn btn-dark perm-admin no-print" onclick="apriModalContabilizzaPassive()">📒 Contabilizza in Prima Nota</button>
       </div>
       <div id="fp-container"></div>
+    </div>
+
+    <!-- ── PRIMA NOTA (REGISTRO MOVIMENTI) ── -->
+    <div id="page-prima-nota-reg" class="page">
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:.8rem">
+          <button class="btn no-print" onclick="apriModulo('benvenuto')" style="font-size:11px">← Torna</button>
+          <div>
+            <div class="page-title">✍️ Registro Movimenti</div>
+            <div class="page-sub">Un evento = una registrazione = una causale. Registro autonomo: non scrive in Contabilità.</div>
+          </div>
+        </div>
+      </div>
+      <div id="pnr-metrics"></div>
+      <div class="toolbar no-print">
+        <select id="pnr-f-soc" class="form-input" style="width:auto" onchange="buildPnr()"><option value="">Tutte le società</option><option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option></select>
+        <select id="pnr-f-caus" class="form-input" style="width:auto" onchange="buildPnr()"><option value="">Tutte le causali</option></select>
+        <input type="month" id="pnr-f-mese" class="form-input" style="width:auto" onchange="buildPnr()" title="Mese dell'evento">
+        <select id="pnr-f-stato" class="form-input" style="width:auto" onchange="buildPnr()">
+          <option value="">Tutti gli stati</option><option value="nv">Da verificare</option><option value="rit">Registrati in ritardo</option><option value="ok">Verificati</option>
+        </select>
+        <input type="text" id="pnr-f-q" class="form-input" placeholder="🔍 Cerca..." style="width:170px" oninput="buildPnr()">
+        <button class="btn btn-dark pnr-edit no-print" onclick="apriModalPnr()">+ Nuova registrazione</button>
+        <button class="btn no-print" onclick="esportaPnrCsv()">⬇ CSV</button>
+      </div>
+      <div id="pnr-container"></div>
     </div>
 
     <!-- ── CONTRATTI DOCUMENTI ── -->
@@ -3734,6 +3766,37 @@ async function cambiaRuoloUtente(uid,ruolo){
 </div>
 
 <!-- MODAL UPLOAD FATTURA PASSIVA -->
+<div class="modal-overlay" id="modal-pnr" onclick="if(event.target===this)chiudiModal('modal-pnr')">
+  <div class="modal" style="width:560px">
+    <div class="modal-title" id="pnr-title">✍️ Nuova registrazione</div>
+    <input type="hidden" id="pnr-id">
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Data evento <span style="font-weight:400;color:var(--text3)">(quando è successo)</span></label><input type="date" class="form-input" id="pnr-data" oninput="pnrAnteprima()"></div>
+      <div class="form-row"><label class="form-label">Società</label><select class="form-input" id="pnr-soc"><option value="">— scegli —</option><option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option></select></div>
+    </div>
+    <div class="form-row"><label class="form-label">Causale</label><select class="form-input" id="pnr-caus" onchange="pnrAnteprima()"></select>
+      <div id="pnr-caus-info" style="margin-top:.35rem;font-size:11px;color:var(--text2)"></div></div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Controparte</label><input type="text" class="form-input" id="pnr-contr" placeholder="Fornitore / cliente / socio" oninput="pnrAnteprima()"></div>
+      <div class="form-row"><label class="form-label">Riferimento <span style="font-weight:400;color:var(--text3)">(n. fattura, contratto…)</span></label><input type="text" class="form-input" id="pnr-rif" oninput="pnrAnteprima()"></div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Importo €</label><input type="number" step="0.01" min="0" class="form-input" id="pnr-imp"></div>
+      <div class="form-row"><label class="form-label" id="pnr-scad-lbl">Scadenza</label><input type="date" class="form-input" id="pnr-scad"></div>
+    </div>
+    <div class="two-col">
+      <div class="form-row"><label class="form-label">Autorizzato da</label><input type="text" class="form-input" id="pnr-aut" placeholder="Chi ha deciso"></div>
+      <div class="form-row"><label class="form-label">Data decisione</label><input type="date" class="form-input" id="pnr-dec"></div>
+    </div>
+    <div class="form-row"><label class="form-label">Note <span style="font-weight:400;color:var(--text3)">(facoltative)</span></label><input type="text" class="form-input" id="pnr-note"></div>
+    <div id="pnr-prev" style="background:var(--bg3);border-radius:8px;padding:.6rem .8rem;font-size:12px;color:var(--text2);margin-bottom:.5rem"></div>
+    <div id="pnr-err" style="display:none;color:var(--rosso);font-size:12px;margin-bottom:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-pnr')">Annulla</button>
+      <button class="btn btn-dark" id="pnr-btn" onclick="salvaPnr()">Registra</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-upload-passiva" onclick="if(event.target===this)chiudiModal('modal-upload-passiva')">
   <div class="modal" style="width:500px">
     <div class="modal-title" id="up-title">📑 Carica Fattura Passiva</div>
@@ -4822,6 +4885,162 @@ async function eliminaSponsor(id){
   }catch(e){ alert('Errore: '+e.message); }
 }
 
+
+// ══ PRIMA NOTA — REGISTRO MOVIMENTI (autonomo: non scrive in Contabilità) ══
+// Collection Firestore: prima_nota_registro. Regole: 1 evento = 1 registrazione = 1 causale; scadenza obbligatoria se si apre debito/credito.
+const PNR_REF = () => db.collection('prima_nota_registro');
+const PNR_CAUSALI = [
+  {n:1, nome:'Costo da pagare',            dare:'Costo (+ IVA a credito se detraibile)', avere:'Debito verso fornitore', scad:true,  quando:'Arriva una fattura/spesa da pagare più avanti'},
+  {n:2, nome:'Pagamento debito',           dare:'Debito verso fornitore',                avere:'Banca / Cassa',          scad:false, quando:'Si paga un debito già registrato'},
+  {n:3, nome:'Spesa pagata subito',        dare:'Costo',                                 avere:'Banca / Cassa',          scad:false, quando:'Si paga all\'istante (carta, contanti, bonifico immediato)'},
+  {n:4, nome:'Ricavo da incassare',        dare:'Credito verso cliente',                 avere:'Ricavo (+ IVA a debito)',scad:true,  quando:'Si emette fattura/quota da incassare più avanti'},
+  {n:5, nome:'Incasso',                    dare:'Banca / Cassa',                         avere:'Credito verso cliente',  scad:false, quando:'Si incassa un credito già registrato'},
+  {n:6, nome:'Spesa anticipata da un socio',dare:'Costo',                                avere:'Conto del socio (debito)',scad:true, quando:'Un socio/dirigente paga di tasca propria'},
+  {n:7, nome:'Rimborso al socio',          dare:'Conto del socio (debito)',              avere:'Banca / Cassa',          scad:false, quando:'Si restituisce al socio quanto anticipato'},
+  {n:8, nome:'Giroconto',                  dare:'Conto di destinazione',                 avere:'Conto di origine',       scad:false, quando:'Spostamento tra conti propri (es. cassa → banca)'}
+];
+const PNR_GIORNI_RITARDO = 7; // oltre questi giorni tra evento e registrazione scatta il segnale "in ritardo"
+let pnrRegistro = [];
+const _pnrC = n => PNR_CAUSALI.find(c=>c.n===n);
+const _pnrEsc = t => String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const _pnrPuoScrivere = () => window.currentRuolo==='admin' || window.currentRuolo==='editor';
+
+async function caricaPnr(){
+  const sel = document.getElementById('pnr-f-caus');
+  if(sel && sel.options.length<=1) PNR_CAUSALI.forEach(c=>sel.add(new Option(c.n+'. '+c.nome, c.n)));
+  document.querySelectorAll('.pnr-edit').forEach(b=>b.style.display = _pnrPuoScrivere()?'':'none');
+  try{
+    const snap = await PNR_REF().orderBy('data','desc').get();
+    pnrRegistro = snap.docs.map(d=>({id:d.id,...d.data()}));
+    buildPnr();
+  }catch(e){
+    console.error('Prima Nota registro:',e.message);
+    const c = document.getElementById('pnr-container');
+    if(c) c.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--rosso)">Impossibile leggere il registro: '+_pnrEsc(e.message)+'<br><span style="font-size:11px;color:var(--text3)">Controlla le regole Firestore per la collection <b>prima_nota_registro</b>.</span></div>';
+  }
+}
+function _pnrGiorniRitardo(r){
+  if(!r.data || !r.creatoIl) return 0;
+  const a = new Date(r.data+'T00:00:00'), b = new Date(r.creatoIl);
+  return Math.floor((b - a)/86400000);
+}
+function buildPnr(){
+  const fs=document.getElementById('pnr-f-soc')?.value||'', fc=document.getElementById('pnr-f-caus')?.value||'',
+        fm=document.getElementById('pnr-f-mese')?.value||'', fst=document.getElementById('pnr-f-stato')?.value||'',
+        q=(document.getElementById('pnr-f-q')?.value||'').toLowerCase();
+  let L = pnrRegistro.filter(r=>{
+    if(fs && r.soc!==fs) return false;
+    if(fc && String(r.causale)!==fc) return false;
+    if(fm && !(r.data||'').startsWith(fm)) return false;
+    if(fst==='nv' && r.verificato) return false;
+    if(fst==='ok' && !r.verificato) return false;
+    if(fst==='rit' && _pnrGiorniRitardo(r)<=PNR_GIORNI_RITARDO) return false;
+    if(q && !((r.controparte||'')+' '+(r.rif||'')+' '+(r.autorizzatoDa||'')+' '+(r.note||'')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const tot = L.reduce((a,r)=>a+(r.importo||0),0);
+  const nv = L.filter(r=>!r.verificato).length, rit = L.filter(r=>_pnrGiorniRitardo(r)>PNR_GIORNI_RITARDO).length;
+  const m = document.getElementById('pnr-metrics');
+  if(m) m.innerHTML = `<div class="metrics">
+    <div class="metric"><div class="metric-label">Movimenti</div><div class="metric-value">${L.length}</div></div>
+    <div class="metric"><div class="metric-label">Importo movimentato</div><div class="metric-value">${fmt(tot)}</div></div>
+    <div class="metric"><div class="metric-label">Da verificare</div><div class="metric-value" style="${nv?'color:var(--rosso)':''}">${nv}</div></div>
+    <div class="metric"><div class="metric-label">Registrati in ritardo (&gt;${PNR_GIORNI_RITARDO} gg)</div><div class="metric-value" style="${rit?'color:var(--rosso)':''}">${rit}</div></div></div>`;
+  const cont = document.getElementById('pnr-container'); if(!cont) return;
+  if(!L.length){ cont.innerHTML='<div style="padding:3rem;text-align:center;color:var(--text3)">Nessuna registrazione. Usa “+ Nuova registrazione”.</div>'; return; }
+  const isAdmin = window.currentRuolo==='admin', w=_pnrPuoScrivere();
+  cont.innerHTML = `<div class="tbl-wrap scrollx"><table><thead><tr>
+    <th>Data evento</th><th>Soc.</th><th>Causale</th><th>Descrizione</th><th>Dare</th><th>Avere</th>
+    <th style="text-align:right">Importo</th><th>Scadenza</th><th>Autorizzato da</th><th>Registrato</th><th>Verifica</th><th></th></tr></thead><tbody>
+    ${L.map(r=>{ const c=_pnrC(r.causale)||{nome:'?',dare:'',avere:''}, g=_pnrGiorniRitardo(r), rit=g>PNR_GIORNI_RITARDO;
+      return `<tr>
+      <td style="white-space:nowrap">${fmtData(r.data)}</td>
+      <td><span class="badge-soc badge-${(r.soc||'?')[0].toLowerCase()}">${_pnrEsc(r.soc)}</span></td>
+      <td style="font-weight:600">${r.causale}. ${_pnrEsc(c.nome)}</td>
+      <td>${_pnrEsc(r.controparte)}${r.rif?' – '+_pnrEsc(r.rif):''}${r.note?`<div style="font-size:10px;color:var(--text3)">${_pnrEsc(r.note)}</div>`:''}</td>
+      <td style="font-size:11px">${_pnrEsc(c.dare)}</td><td style="font-size:11px">${_pnrEsc(c.avere)}</td>
+      <td class="num" style="font-weight:600">${fmt(r.importo)}</td>
+      <td style="white-space:nowrap">${r.scadenza?fmtData(r.scadenza):'—'}</td>
+      <td style="font-size:11px">${_pnrEsc(r.autorizzatoDa)}${r.dataDecisione?'<div style="font-size:10px;color:var(--text3)">'+fmtData(r.dataDecisione)+'</div>':''}</td>
+      <td style="font-size:11px;white-space:nowrap">${r.creatoIl?fmtData(r.creatoIl):'—'}${rit?`<div style="color:var(--rosso);font-weight:700;font-size:10px">+${g} gg</div>`:''}<div style="font-size:10px;color:var(--text3)">${_pnrEsc(r.creatoDa||'')}</div></td>
+      <td>${r.verificato?`<span style="color:var(--verde);font-weight:700;font-size:11px">✔ OK</span><div style="font-size:10px;color:var(--text3)">${_pnrEsc(r.verificatoDa||'')} ${r.verificatoIl?fmtData(r.verificatoIl):''}</div>`:'<span style="color:var(--text3);font-size:11px">da verificare</span>'}${isAdmin?`<div><button class="btn" style="font-size:10px;padding:1px 8px;margin-top:3px" onclick="pnrVerifica('${r.id}')">${r.verificato?'Annulla':'Verifica'}</button></div>`:''}</td>
+      <td style="white-space:nowrap">${w?`<button class="btn" style="font-size:10px;padding:2px 8px" onclick="apriModalPnr('${r.id}')">✏️</button>`:''}${isAdmin?` <button class="btn-del" onclick="eliminaPnr('${r.id}')">✕</button>`:''}</td></tr>`;}).join('')}
+    </tbody></table></div>`;
+}
+function apriModalPnr(id){
+  if(!_pnrPuoScrivere()){ alert('Non hai i permessi per registrare movimenti.'); return; }
+  const r = id ? pnrRegistro.find(x=>x.id===id) : null;
+  const cs = document.getElementById('pnr-caus');
+  cs.innerHTML = '<option value="">— scegli la causale —</option>'+PNR_CAUSALI.map(c=>`<option value="${c.n}">${c.n}. ${c.nome}</option>`).join('');
+  document.getElementById('pnr-id').value = id||'';
+  document.getElementById('pnr-title').textContent = r ? '✏️ Modifica registrazione' : '✍️ Nuova registrazione';
+  document.getElementById('pnr-btn').textContent = r ? 'Salva' : 'Registra';
+  const set=(k,v)=>document.getElementById(k).value = v==null?'':v;
+  set('pnr-data', r?r.data:new Date().toISOString().slice(0,10)); set('pnr-soc', r?r.soc:''); set('pnr-caus', r?r.causale:'');
+  set('pnr-contr', r?r.controparte:''); set('pnr-rif', r?r.rif:''); set('pnr-imp', r?r.importo:''); set('pnr-scad', r?r.scadenza:'');
+  set('pnr-aut', r?r.autorizzatoDa:''); set('pnr-dec', r?r.dataDecisione:''); set('pnr-note', r?r.note:'');
+  document.getElementById('pnr-err').style.display='none';
+  pnrAnteprima(); apriModal('modal-pnr');
+}
+function pnrAnteprima(){
+  const n = parseInt(document.getElementById('pnr-caus').value)||0, c=_pnrC(n);
+  const info = document.getElementById('pnr-caus-info'), lbl=document.getElementById('pnr-scad-lbl'), prev=document.getElementById('pnr-prev');
+  if(!c){ info.textContent=''; lbl.innerHTML='Scadenza'; prev.textContent='Scegli la causale: dare e avere si compilano da soli.'; return; }
+  info.textContent = c.quando;
+  lbl.innerHTML = c.scad ? 'Scadenza <span style="color:var(--rosso)">* obbligatoria</span>' : 'Scadenza <span style="font-weight:400;color:var(--text3)">(non richiesta)</span>';
+  const contr=document.getElementById('pnr-contr').value.trim(), rif=document.getElementById('pnr-rif').value.trim();
+  prev.innerHTML = `<b>Descrizione:</b> ${_pnrEsc(c.nome)} – ${_pnrEsc(contr||'…')}${rif?' – '+_pnrEsc(rif):''}<br><b>Dare:</b> ${_pnrEsc(c.dare)} &nbsp;·&nbsp; <b>Avere:</b> ${_pnrEsc(c.avere)}`;
+}
+async function salvaPnr(){
+  const v=k=>document.getElementById(k).value.trim(), id=v('pnr-id');
+  const n=parseInt(v('pnr-caus'))||0, c=_pnrC(n), imp=Math.round((parseFloat(v('pnr-imp'))||0)*100)/100;
+  const err=[];
+  if(!v('pnr-data')) err.push('data evento'); if(!v('pnr-soc')) err.push('società'); if(!c) err.push('causale');
+  if(!v('pnr-contr')) err.push('controparte'); if(!(imp>0)) err.push('importo (maggiore di zero)');
+  if(!v('pnr-aut')) err.push('chi ha autorizzato'); if(!v('pnr-dec')) err.push('data della decisione');
+  if(c && c.scad && !v('pnr-scad')) err.push('scadenza (richiesta da questa causale)');
+  const box=document.getElementById('pnr-err');
+  if(err.length){ box.style.display='block'; box.textContent='Mancano: '+err.join(', ')+'.'; return; }
+  if(v('pnr-scad') && v('pnr-scad')<v('pnr-data')){ box.style.display='block'; box.textContent='La scadenza non può precedere la data dell\'evento.'; return; }
+  if(v('pnr-dec')>new Date().toISOString().slice(0,10)){ box.style.display='block'; box.textContent='La data della decisione non può essere futura.'; return; }
+  // possibile doppione (stessa società, causale, controparte, riferimento, importo)
+  const dup = pnrRegistro.find(r=>r.id!==id && r.soc===v('pnr-soc') && r.causale===n && (r.controparte||'').toLowerCase()===v('pnr-contr').toLowerCase() && (r.rif||'')===v('pnr-rif') && r.importo===imp);
+  if(dup && !confirm('Esiste già una registrazione identica del '+fmtData(dup.data)+'. Registrare comunque?')) return;
+  const dati = {data:v('pnr-data'), soc:v('pnr-soc'), causale:n, controparte:v('pnr-contr'), rif:v('pnr-rif'), importo:imp,
+    scadenza:v('pnr-scad')||'', autorizzatoDa:v('pnr-aut'), dataDecisione:v('pnr-dec'), note:v('pnr-note')};
+  const btn=document.getElementById('pnr-btn'); btn.disabled=true;
+  try{
+    if(id){
+      await PNR_REF().doc(id).update({...dati, modificatoIl:new Date().toISOString(), modificatoDa:window._currentUser?.nome||''});
+    } else {
+      await PNR_REF().add({...dati, creatoIl:new Date().toISOString(), creatoDa:window._currentUser?.nome||'', verificato:false});
+    }
+    chiudiModal('modal-pnr'); await caricaPnr();
+  }catch(e){ box.style.display='block'; box.textContent='Errore nel salvataggio: '+e.message; }
+  btn.disabled=false;
+}
+async function pnrVerifica(id){
+  const r=pnrRegistro.find(x=>x.id===id); if(!r||window.currentRuolo!=='admin') return;
+  try{
+    await PNR_REF().doc(id).update(r.verificato ? {verificato:false,verificatoDa:'',verificatoIl:''} : {verificato:true,verificatoDa:window._currentUser?.nome||'',verificatoIl:new Date().toISOString()});
+    await caricaPnr();
+  }catch(e){ alert('Errore: '+e.message); }
+}
+async function eliminaPnr(id){
+  if(window.currentRuolo!=='admin') return;
+  const r=pnrRegistro.find(x=>x.id===id); if(!r) return;
+  if(!confirm('Eliminare la registrazione “'+(r.controparte||'')+'” di '+fmt(r.importo)+'? L\'operazione non si annulla.')) return;
+  try{ await PNR_REF().doc(id).delete(); await caricaPnr(); }catch(e){ alert('Errore: '+e.message); }
+}
+function esportaPnrCsv(){
+  const q=x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"';
+  const rows=[['Data evento','Società','Causale','Controparte','Riferimento','Importo','Conto dare','Conto avere','Scadenza','Autorizzato da','Data decisione','Note','Registrato il','Registrato da','Verificato']];
+  pnrRegistro.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(r=>{ const c=_pnrC(r.causale)||{};
+    rows.push([r.data,r.soc,(r.causale||'')+'. '+(c.nome||''),r.controparte,r.rif,String(r.importo).replace('.',','),c.dare,c.avere,r.scadenza,r.autorizzatoDa,r.dataDecisione,r.note,(r.creatoIl||'').slice(0,10),r.creatoDa,r.verificato?'sì':'no']); });
+  const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='prima_nota_registro.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
 // ── NAVIGAZIONE MODULI ──
 function apriModulo(modulo){
   // Nascondi/mostra sidebar in base al modulo
@@ -4846,6 +5065,10 @@ function apriModulo(modulo){
     sidebar.style.display = 'none';
     caricaFatturePassive();
     showPage('fatture-passive', null);
+  } else if(modulo === 'prima-nota-reg'){
+    sidebar.style.display = 'none';
+    caricaPnr();
+    showPage('prima-nota-reg', null);
   } else if(modulo === 'contratti-doc'){
     sidebar.style.display = 'none';
     caricaContrattiDoc();
