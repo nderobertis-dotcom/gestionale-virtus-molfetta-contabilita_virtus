@@ -222,7 +222,9 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
   .page{display:none!important;height:auto!important;overflow:visible!important;padding:.3rem}
   .page.print-active{display:block!important;height:auto!important;overflow:visible!important}
   .tbl-wrap{overflow:visible!important;height:auto!important;box-shadow:none;border:none}
-  .mastrino{overflow:visible!important;break-inside:avoid;margin-bottom:.8rem}
+  .mastrino{overflow:visible!important;break-inside:auto;margin-bottom:.8rem}
+  .mastrino-header{break-after:avoid}
+  .mastrino-th,.mastrino-td{break-inside:avoid}
   /* Font e dimensioni */
   body{background:#fff!important;font-size:10px;color:#000}
   table{font-size:9px;width:100%}
@@ -582,7 +584,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
       <div class="page-header">
         <div class="page-title">📋 Mastrini</div>
         <div class="page-sub">Situazione per singolo conto</div>
-      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('mastrini')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn btn-dark" onclick="pdfMastrini()" style="font-size:11px" title="Scarica un PDF ordinato dei mastrini visibili (rispetta società, classe e ricerca)">📄 Scarica PDF</button> <button class="btn" onclick="stampaPDF('mastrini')" style="font-size:11px" title="Stampa diretta della pagina: per mastrini lunghi è meglio il PDF">🖨️ Stampa</button></div>
       </div>
       <div class="toolbar">
         <select id="mast-soc" class="form-input" style="width:auto" onchange="buildMastrini()">
@@ -1703,6 +1705,7 @@ function buildMastrini(){
       <div class="mastrino-header">
         <span>${conto.codice} — ${conto.nome}</span>
         <div style="display:flex;align-items:center;gap:.6rem">
+          <button class="btn no-print" style="font-size:9px;padding:1px 8px" title="PDF di questo solo mastrino" onclick="pdfMastrini('${conto.id}')">📄 PDF</button>
           <span>Saldo: ${fmt(Math.abs(saldo))} ${saldoLabel}</span>
           ${isContoRateabile(conto.id)?`<span style="font-size:9px;color:rgba(255,255,255,.6)" title="Ogni voce ha un proprio piano rate: usa l'icona 📅 sulla singola riga">📅 per riga</span>`:''}
         </div>
@@ -5046,6 +5049,110 @@ function esportaPnrCsv(){
     rows.push([r.data,r.soc,(r.causale||'')+'. '+(c.nome||''),r.controparte,r.rif,String(r.importo).replace('.',','),c.dare,c.avere,r.scadenza,r.autorizzatoDa,r.dataDecisione,r.note,(r.creatoIl||'').slice(0,10),r.creatoDa,r.verificato?'sì':'no']); });
   const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='prima_nota_registro.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+
+// ── PDF MASTRINI (generato con jsPDF: pagine A4 ordinate, intestazione ripetuta, numeri di pagina) ──
+function _mastrinoDati(conto, filtSoc){
+  const mov = [];
+  bilancioApertura.filter(b=>b.contoId===conto.id&&(!filtSoc||b.soc===filtSoc)).forEach(b=>
+    mov.push({data:STAGIONE_START, desc:'Saldo iniziale'+(b.note?' — '+b.note:''), dare:b.dare||0, avere:b.avere||0, soc:b.soc}));
+  registrazioni.filter(r=>!filtSoc||r.soc===filtSoc).forEach(r=>
+    (r.righe||[]).filter(g=>g.contoId===conto.id).forEach(g=>
+      mov.push({data:r.data, desc:(r.desc||'')+(r.rif?' ('+r.rif+')':''), dare:g.dare||0, avere:g.avere||0, soc:r.soc})));
+  mov.sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const cl = parseInt(conto.classe||conto.codice?.split('.')[0]);
+  const segno = (cl===1||cl===4) ? 1 : -1;           // saldo positivo = lato naturale del conto
+  const lab = v => (cl===1||cl===4) ? (v>=0?'D':'A') : (v>=0?'A':'D');
+  let prog = 0;
+  mov.forEach(m=>{ prog += segno*(m.dare-m.avere); m.prog = prog; m.progLab = lab(prog); });
+  const totDare = mov.reduce((a,m)=>a+m.dare,0), totAvere = mov.reduce((a,m)=>a+m.avere,0);
+  const saldo = segno*(totDare-totAvere);
+  return {mov, totDare, totAvere, saldo, saldoLab:lab(saldo)};
+}
+function pdfMastrini(soloContoId){
+  const J = window.jspdf && window.jspdf.jsPDF;
+  if(!J){ alert('Libreria PDF non caricata: ricarica la pagina e riprova.'); return; }
+  const filtSoc    = document.getElementById('mast-soc')?.value||'';
+  const filtClasse = document.getElementById('mast-classe')?.value||'';
+  const search     = (document.getElementById('mast-search')?.value||'').toLowerCase();
+  const usati = new Set();
+  [...registrazioni, ...bilancioApertura].forEach(r=>{
+    if(filtSoc && r.soc!==filtSoc) return;
+    (r.righe||[{contoId:r.contoId}]).forEach(g=>{ if(g.contoId) usati.add(g.contoId); });
+  });
+  let conti = pianoConti.filter(c=>usati.has(c.id));
+  if(soloContoId) conti = conti.filter(c=>c.id===soloContoId);
+  else conti = conti.filter(c=>{
+    if(filtClasse && String(c.classe||c.codice?.split('.')[0])!==filtClasse) return false;
+    if(search && !c.nome.toLowerCase().includes(search) && !(c.codice||'').includes(search)) return false;
+    return true;
+  });
+  conti.sort((a,b)=>(a.codice||'').localeCompare(b.codice||''));
+  if(!conti.length){ alert('Nessun mastrino da stampare con i filtri attuali.'); return; }
+
+  const doc = new J({unit:'mm', format:'a4'});
+  const W=210, H=297, M=12, R=W-M, TOP=26, BOT=H-14;
+  const COL = {data:M+1.5, soc:M+20, desc:M+34, dare:R-62, avere:R-34, saldo:R-1.5};   // dare/avere/saldo allineati a destra
+  const DESC_W = (R-62-24) - (M+34);
+  const n = v => new Intl.NumberFormat('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
+  const titolo = 'Mastrini' + (soloContoId ? ' — '+(conti[0].codice+' '+conti[0].nome) : '');
+  const sub = 'Gruppo Virtus Molfetta' + (filtSoc?' — '+filtSoc:' — tutte le società') + ' · Stagione 2026/2027';
+  const stampa = new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  let y = TOP;
+  const intestaPagina = ()=>{
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(26,26,46); doc.text(titolo, M, 14);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(90); doc.text(sub, M, 19.5);
+    doc.text('Stampato il '+stampa, R, 14, {align:'right'});
+    doc.setDrawColor(26,26,46); doc.setLineWidth(.4); doc.line(M, 22, R, 22);
+    y = TOP;
+  };
+  const colHead = ()=>{
+    doc.setFillColor(235,237,242); doc.rect(M, y-3.6, R-M, 5.2, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(70);
+    doc.text('DATA', COL.data, y); doc.text('SOC.', COL.soc, y); doc.text('DESCRIZIONE', COL.desc, y);
+    doc.text('DARE', COL.dare, y, {align:'right'}); doc.text('AVERE', COL.avere, y, {align:'right'}); doc.text('SALDO PROG.', COL.saldo, y, {align:'right'});
+    y += 5;
+  };
+  const headConto = (c, d, segue)=>{
+    doc.setFillColor(13,59,110); doc.rect(M, y-4.2, R-M, 6.4, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(255);
+    doc.text(c.codice+' — '+c.nome+(segue?'  (segue)':''), M+1.5, y);
+    doc.text('Saldo: '+n(Math.abs(d.saldo))+' € '+d.saldoLab, R-1.5, y, {align:'right'});
+    y += 6.5; colHead();
+  };
+  intestaPagina();
+  conti.forEach((c,ci)=>{
+    const d = _mastrinoDati(c, filtSoc);
+    if(y + 30 > BOT){ doc.addPage(); intestaPagina(); }
+    headConto(c, d, false);
+    doc.setFontSize(8);
+    d.mov.forEach((m,i)=>{
+      const righe = doc.splitTextToSize(m.desc||'', DESC_W);
+      const h = Math.max(1, righe.length)*3.7 + 1.6;
+      if(y + h > BOT){ doc.addPage(); intestaPagina(); headConto(c, d, true); doc.setFontSize(8); }
+      doc.setFont('helvetica','normal'); doc.setTextColor(30);
+      doc.text(fmtData(m.data), COL.data, y);
+      doc.text(String(m.soc||'').slice(0,3), COL.soc, y);
+      doc.text(righe, COL.desc, y);
+      doc.text(m.dare?n(m.dare):'—', COL.dare, y, {align:'right'});
+      doc.text(m.avere?n(m.avere):'—', COL.avere, y, {align:'right'});
+      doc.text(n(Math.abs(m.prog))+' '+m.progLab, COL.saldo, y, {align:'right'});
+      doc.setDrawColor(215); doc.setLineWidth(.15); doc.line(M, y+h-3.1, R, y+h-3.1);
+      y += h;
+    });
+    if(y + 7 > BOT){ doc.addPage(); intestaPagina(); headConto(c, d, true); }
+    doc.setFillColor(235,237,242); doc.rect(M, y-3.6, R-M, 5.6, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(26,26,46);
+    doc.text('TOTALE', COL.desc, y);
+    doc.text(n(d.totDare), COL.dare, y, {align:'right'}); doc.text(n(d.totAvere), COL.avere, y, {align:'right'});
+    doc.text(n(Math.abs(d.saldo))+' '+d.saldoLab, COL.saldo, y, {align:'right'});
+    y += 10;
+  });
+  const tot = doc.getNumberOfPages();
+  for(let p=1;p<=tot;p++){ doc.setPage(p); doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(120); doc.text('Pag. '+p+' / '+tot, R, H-7, {align:'right'}); doc.text('D = dare · A = avere · saldo nel lato naturale del conto', M, H-7); }
+  const nome = soloContoId ? 'Mastrino_'+(conti[0].codice||'').replace(/[^\w.]+/g,'-') : 'Mastrini'+(filtSoc?'_'+filtSoc:'');
+  doc.save(nome+'_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 
 // ── NAVIGAZIONE MODULI ──
