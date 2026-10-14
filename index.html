@@ -1358,10 +1358,14 @@ async function salvaPrimaNota(){
 
   // Se stiamo saldando una rata, aggiorna lo stato scadenzario
   const saldaRataId = document.getElementById('modal-primanota').dataset.saldaRataId;
-  const saldaImporto = parseFloat(document.getElementById('modal-primanota').dataset.saldaImporto)||0;
-  if(saldaRataId && saldaImporto){
+  const saldaImportoProposto = parseFloat(document.getElementById('modal-primanota').dataset.saldaImporto)||0;
+  if(saldaRataId && saldaImportoProposto){
     const s = scadenzario.find(x=>x.id===saldaRataId);
     if(s){
+      // Importo realmente registrato sul conto della rata (l'utente può averlo modificato nel modal Prima Nota,
+      // es. un acconto di 500 su una rata da 2500); solo se non rilevabile si usa l'importo proposto
+      const _eff = Math.round(rec.righe.filter(g=>g.contoId===s.contoId).reduce((a,g)=>a+((s.tipo==='credito'?g.avere:g.dare)||0),0)*100)/100;
+      const saldaImporto = _eff>0 ? _eff : saldaImportoProposto;
       s.saldato = (s.saldato||0)+saldaImporto;
       s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
       if(s.stato==='pagato') s.dataPagamento = document.getElementById('pn-data').value||new Date().toISOString().slice(0,10);
@@ -2078,8 +2082,8 @@ function renderRigheRate(){
     const statoClr = {saldata:'var(--ricavo)',scaduta:'var(--costo)',corrente:'#F57F17',futura:'#1565C0'};
     const residuoR = Math.round(((parseFloat(r.importo)||0)-(r.saldato||0))*100)/100;
     const azione = stato==='saldata'
-      ? `<div style="font-size:9px;font-weight:700;text-align:center;color:var(--ricavo)" title="${r.dataPagamento?'Pagata il '+fmtData(r.dataPagamento):''}">✅ saldata${r.dataPagamento?'<br><span style="font-weight:400">'+fmtData(r.dataPagamento)+'</span>':''}<br><a href="#" style="font-weight:400;color:var(--text2)" onclick="azzeraSaldatoRata(${i});return false">azzera saldo</a></div>`
-      : `<button class="btn btn-dark" style="font-size:10px;padding:3px 6px;white-space:nowrap" title="Registra il ${_rateContext?.tipo==='incasso'?'incasso':'pagamento'} di questa rata in Prima Nota${r.saldato?' (residuo '+fmt(residuoR)+')':''}" onclick="saldaRataDaModal(${i})">📒 Salda${r.saldato?' *':''}</button>${r.saldato?`<div style="font-size:9px;text-align:center;margin-top:1px;color:var(--text2)">saldato ${fmt(r.saldato)}<br><a href="#" style="color:var(--costo)" onclick="azzeraSaldatoRata(${i});return false">azzera saldo</a></div>`:''}`;
+      ? `<div style="font-size:9px;font-weight:700;text-align:center;color:var(--ricavo)" title="${r.dataPagamento?'Pagata il '+fmtData(r.dataPagamento):''}">✅ saldata${r.dataPagamento?'<br><span style="font-weight:400">'+fmtData(r.dataPagamento)+'</span>':''}<br><a href="#" style="font-weight:400;color:var(--text2)" onclick="correggiSaldatoRata(${i});return false">correggi saldo</a></div>`
+      : `<button class="btn btn-dark" style="font-size:10px;padding:3px 6px;white-space:nowrap" title="Registra il ${_rateContext?.tipo==='incasso'?'incasso':'pagamento'} di questa rata in Prima Nota${r.saldato?' (residuo '+fmt(residuoR)+')':''}" onclick="saldaRataDaModal(${i})">📒 Salda${r.saldato?' *':''}</button>${r.saldato?`<div style="font-size:9px;text-align:center;margin-top:1px;color:var(--text2)">saldato ${fmt(r.saldato)}<br><a href="#" style="color:var(--costo)" onclick="correggiSaldatoRata(${i});return false">correggi saldo</a></div>`:''}`;
     return `<div style="display:grid;grid-template-columns:28px 1fr 1fr 96px 28px;gap:.3rem;margin-bottom:.25rem;align-items:center;background:${statoBg[stato]};border-radius:4px;padding:2px .2rem">
       <div style="font-size:10px;font-weight:700;text-align:center;color:var(--text2)">${i+1}</div>
       <input type="date" class="form-input" value="${r.scadenza||''}" style="font-size:11px;padding:4px 6px"
@@ -2132,11 +2136,17 @@ function _persistiPianoDaModal(){
   return piano;
 }
 
-// Azzera l'importo saldato di una rata (es. saldo ereditato per errore da un altro piano). NON tocca la Prima Nota.
-function azzeraSaldatoRata(i){
+// Corregge l'importo saldato di una rata (es. saldo registrato per errore per l'intero importo o ereditato da un altro piano).
+// NON modifica la Prima Nota.
+function correggiSaldatoRata(i){
   const r = _righeRate[i]; if(!r) return;
-  if(!confirm(`Azzerare il saldo della rata ${i+1} (saldato ${fmt(r.saldato||0)})?\n\nLa rata torna da pagare per intero. Eventuali registrazioni in Prima Nota collegate NON vengono eliminate.`)) return;
-  r.saldato = 0; r.stato = 'aperto'; delete r.dataPagamento;
+  const v = prompt(`Importo realmente saldato per la rata ${i+1} (importo rata ${fmt(r.importo)}).\n0 = rata da pagare per intero.\nLa Prima Nota non viene modificata.`, String(r.saldato||0));
+  if(v===null) return;
+  const n = Math.round((parseFloat(String(v).replace(',','.'))||0)*100)/100;
+  if(n<0 || n>(parseFloat(r.importo)||0)+0.01){ alert('Importo non valido: deve essere tra 0 e '+fmt(r.importo)+'.'); return; }
+  r.saldato = n;
+  if(n>=(parseFloat(r.importo)||0)-0.01){ r.stato='pagato'; if(!r.dataPagamento) r.dataPagamento=new Date().toISOString().slice(0,10); }
+  else { r.stato = n>0 ? 'parziale' : 'aperto'; delete r.dataPagamento; }
   if(!_persistiPianoDaModal()) return;
   renderRigheRate();
   buildScadenzario();
