@@ -4900,24 +4900,26 @@ async function eliminaSponsor(id){
 // Collection Firestore: prima_nota_registro. Regole: 1 evento = 1 registrazione = 1 causale; scadenza obbligatoria se si apre debito/credito.
 const PNR_REF = () => db.collection('prima_nota_registro');
 const PNR_CAUSALI = [
-  {n:1, nome:'Costo da pagare',            dare:'Costo (+ IVA a credito se detraibile)', avere:'Debito verso fornitore', scad:true,  quando:'Arriva una fattura/spesa da pagare più avanti'},
-  {n:2, nome:'Pagamento debito',           dare:'Debito verso fornitore',                avere:'Banca / Cassa',          scad:false, quando:'Si paga un debito già registrato'},
-  {n:3, nome:'Spesa pagata subito',        dare:'Costo',                                 avere:'Banca / Cassa',          scad:false, quando:'Si paga all\'istante (carta, contanti, bonifico immediato)'},
-  {n:4, nome:'Ricavo da incassare',        dare:'Credito verso cliente',                 avere:'Ricavo (+ IVA a debito)',scad:true,  quando:'Si emette fattura/quota da incassare più avanti'},
-  {n:5, nome:'Incasso',                    dare:'Banca / Cassa',                         avere:'Credito verso cliente',  scad:false, quando:'Si incassa un credito già registrato'},
-  {n:6, nome:'Spesa anticipata da un socio',dare:'Costo',                                avere:'Conto del socio (debito)',scad:true, quando:'Un socio/dirigente paga di tasca propria'},
-  {n:7, nome:'Rimborso al socio',          dare:'Conto del socio (debito)',              avere:'Banca / Cassa',          scad:false, quando:'Si restituisce al socio quanto anticipato'},
-  {n:8, nome:'Giroconto',                  dare:'Conto di destinazione',                 avere:'Conto di origine',       scad:false, quando:'Spostamento tra conti propri (es. cassa → banca)'}
+  {n:1, nome:'Costo da pagare',            dare:'Costo (+ IVA a credito se detraibile)', avere:'Debito verso fornitore', scad:true,  sig:'costo già sostenuto, non ancora pagato: fattura da saldare più avanti', quando:'Arriva una fattura/spesa da pagare più avanti'},
+  {n:2, nome:'Pagamento debito',           dare:'Debito verso fornitore',                avere:'Banca / Cassa',          scad:false, sig:'si paga un debito già registrato con la causale 1', quando:'Si paga un debito già registrato'},
+  {n:3, nome:'Spesa pagata subito',        dare:'Costo',                                 avere:'Banca / Cassa',          scad:false, sig:'costo e pagamento nello stesso momento, senza debito', quando:'Si paga all\'istante (carta, contanti, bonifico immediato)'},
+  {n:4, nome:'Ricavo da incassare',        dare:'Credito verso cliente',                 avere:'Ricavo (+ IVA a debito)',scad:true,  sig:'ricavo già maturato, non ancora incassato', quando:'Si emette fattura/quota da incassare più avanti'},
+  {n:5, nome:'Incasso',                    dare:'Banca / Cassa',                         avere:'Credito verso cliente',  scad:false, sig:'si incassa un credito già registrato con la causale 4', quando:'Si incassa un credito già registrato'},
+  {n:6, nome:'Spesa anticipata da un socio',dare:'Costo',                                avere:'Conto del socio (debito)',scad:true, sig:'un socio/dirigente paga di tasca propria, da rimborsargli', quando:'Un socio/dirigente paga di tasca propria'},
+  {n:7, nome:'Rimborso al socio',          dare:'Conto del socio (debito)',              avere:'Banca / Cassa',          scad:false, sig:'si restituisce al socio quanto aveva anticipato', quando:'Si restituisce al socio quanto anticipato'},
+  {n:8, nome:'Giroconto',                  dare:'Conto di destinazione',                 avere:'Conto di origine',       scad:false, sig:'spostamento tra conti propri (es. cassa → banca)', quando:'Spostamento tra conti propri (es. cassa → banca)'}
 ];
 const PNR_GIORNI_RITARDO = 7; // oltre questi giorni tra evento e registrazione scatta il segnale "in ritardo"
 let pnrRegistro = [];
 const _pnrC = n => PNR_CAUSALI.find(c=>c.n===n);
+// etichetta completa: nome + significato fra parentesi (il compilatore non deve interpretare)
+const _pnrLab = c => c.nome+' ('+c.sig+')';
 const _pnrEsc = t => String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const _pnrPuoScrivere = () => window.currentRuolo==='admin' || window.currentRuolo==='editor';
 
 async function caricaPnr(){
   const sel = document.getElementById('pnr-f-caus');
-  if(sel && sel.options.length<=1) PNR_CAUSALI.forEach(c=>sel.add(new Option(c.n+'. '+c.nome, c.n)));
+  if(sel && sel.options.length<=1) PNR_CAUSALI.forEach(c=>sel.add(new Option(c.n+'. '+_pnrLab(c), c.n)));
   document.querySelectorAll('.pnr-edit').forEach(b=>b.style.display = _pnrPuoScrivere()?'':'none');
   try{
     const snap = await PNR_REF().orderBy('data','desc').get();
@@ -4966,7 +4968,7 @@ function buildPnr(){
       return `<tr>
       <td style="white-space:nowrap">${fmtData(r.data)}</td>
       <td><span class="badge-soc badge-${(r.soc||'?')[0].toLowerCase()}">${_pnrEsc(r.soc)}</span></td>
-      <td style="font-weight:600">${r.causale}. ${_pnrEsc(c.nome)}</td>
+      <td><b>${r.causale}. ${_pnrEsc(c.nome)}</b><div style="font-size:10px;color:var(--text3)">(${_pnrEsc(c.sig||'')})</div></td>
       <td>${_pnrEsc(r.controparte)}${r.rif?' – '+_pnrEsc(r.rif):''}${r.note?`<div style="font-size:10px;color:var(--text3)">${_pnrEsc(r.note)}</div>`:''}</td>
       <td style="font-size:11px">${_pnrEsc(c.dare)}</td><td style="font-size:11px">${_pnrEsc(c.avere)}</td>
       <td class="num" style="font-weight:600">${fmt(r.importo)}</td>
@@ -4981,7 +4983,7 @@ function apriModalPnr(id){
   if(!_pnrPuoScrivere()){ alert('Non hai i permessi per registrare movimenti.'); return; }
   const r = id ? pnrRegistro.find(x=>x.id===id) : null;
   const cs = document.getElementById('pnr-caus');
-  cs.innerHTML = '<option value="">— scegli la causale —</option>'+PNR_CAUSALI.map(c=>`<option value="${c.n}">${c.n}. ${c.nome}</option>`).join('');
+  cs.innerHTML = '<option value="">— scegli la causale —</option>'+PNR_CAUSALI.map(c=>`<option value="${c.n}">${c.n}. ${_pnrLab(c)}</option>`).join('');
   document.getElementById('pnr-id').value = id||'';
   document.getElementById('pnr-title').textContent = r ? '✏️ Modifica registrazione' : '✍️ Nuova registrazione';
   document.getElementById('pnr-btn').textContent = r ? 'Salva' : 'Registra';
@@ -4996,7 +4998,7 @@ function pnrAnteprima(){
   const n = parseInt(document.getElementById('pnr-caus').value)||0, c=_pnrC(n);
   const info = document.getElementById('pnr-caus-info'), lbl=document.getElementById('pnr-scad-lbl'), prev=document.getElementById('pnr-prev');
   if(!c){ info.textContent=''; lbl.innerHTML='Scadenza'; prev.textContent='Scegli la causale: dare e avere si compilano da soli.'; return; }
-  info.textContent = c.quando;
+  info.textContent = 'Significa: '+c.sig+'.';
   lbl.innerHTML = c.scad ? 'Scadenza <span style="color:var(--rosso)">* obbligatoria</span>' : 'Scadenza <span style="font-weight:400;color:var(--text3)">(non richiesta)</span>';
   const contr=document.getElementById('pnr-contr').value.trim(), rif=document.getElementById('pnr-rif').value.trim();
   prev.innerHTML = `<b>Descrizione:</b> ${_pnrEsc(c.nome)} – ${_pnrEsc(contr||'…')}${rif?' – '+_pnrEsc(rif):''}<br><b>Dare:</b> ${_pnrEsc(c.dare)} &nbsp;·&nbsp; <b>Avere:</b> ${_pnrEsc(c.avere)}`;
@@ -5046,7 +5048,7 @@ function esportaPnrCsv(){
   const q=x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"';
   const rows=[['Data evento','Società','Causale','Controparte','Riferimento','Importo','Conto dare','Conto avere','Scadenza','Autorizzato da','Data decisione','Note','Registrato il','Registrato da','Verificato']];
   pnrRegistro.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(r=>{ const c=_pnrC(r.causale)||{};
-    rows.push([r.data,r.soc,(r.causale||'')+'. '+(c.nome||''),r.controparte,r.rif,String(r.importo).replace('.',','),c.dare,c.avere,r.scadenza,r.autorizzatoDa,r.dataDecisione,r.note,(r.creatoIl||'').slice(0,10),r.creatoDa,r.verificato?'sì':'no']); });
+    rows.push([r.data,r.soc,(r.causale||'')+'. '+(c.nome||'')+(c.sig?' ('+c.sig+')':''),r.controparte,r.rif,String(r.importo).replace('.',','),c.dare,c.avere,r.scadenza,r.autorizzatoDa,r.dataDecisione,r.note,(r.creatoIl||'').slice(0,10),r.creatoDa,r.verificato?'sì':'no']); });
   const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='prima_nota_registro.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
