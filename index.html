@@ -3780,8 +3780,8 @@ async function cambiaRuoloUtente(uid,ruolo){
     <div class="form-row"><label class="form-label">Causale</label><select class="form-input" id="pnr-caus" onchange="pnrAnteprima()"></select>
       <div id="pnr-caus-info" style="margin-top:.35rem;font-size:11px;color:var(--text2)"></div></div>
     <div id="pnr-fin-box" class="two-col" style="display:none">
-      <div class="form-row"><label class="form-label" id="pnr-fin-lbl">Conto finanziario</label><select class="form-input" id="pnr-fin" onchange="pnrAnteprima()"></select></div>
-      <div class="form-row" id="pnr-fin2-row" style="display:none"><label class="form-label" id="pnr-fin2-lbl">Conto di destinazione</label><select class="form-input" id="pnr-fin2" onchange="pnrAnteprima()"></select></div>
+      <div class="form-row"><label class="form-label" id="pnr-fin-lbl">Conto finanziario</label><select class="form-input" id="pnr-fin" onchange="pnrFinCambio(this)"></select></div>
+      <div class="form-row" id="pnr-fin2-row" style="display:none"><label class="form-label" id="pnr-fin2-lbl">Conto di destinazione</label><select class="form-input" id="pnr-fin2" onchange="pnrFinCambio(this)"></select></div>
     </div>
     <div class="two-col">
       <div class="form-row"><label class="form-label">Controparte</label><input type="text" class="form-input" id="pnr-contr" placeholder="Fornitore / cliente / socio" oninput="pnrAnteprima()"></div>
@@ -4922,8 +4922,11 @@ function _pnrContiFin(soc){
   const foglia = c=>!pianoConti.some(x=>x.padre===c.id);
   const sotto = (c,pad)=>{ let p=c; const vis=new Set(); while(p && !vis.has(p.id)){ vis.add(p.id); if(p.padre===pad.id) return true; p=pianoConti.find(x=>x.id===p.padre); } return false; };
   const radice = pianoConti.find(c=>c.codice==='1.1') || pianoConti.find(c=>/disponibilit/i.test(c.nome) && c.classe===1);
-  let L = radice ? pianoConti.filter(c=>foglia(c) && (c.id===radice.id || sotto(c,radice))) : [];
-  if(!L.length) L = pianoConti.filter(c=>parseInt(c.classe||c.codice?.split('.')[0])===1 && foglia(c) && c.tipo!=='classe');
+  const cl1 = c=>parseInt(c.classe||c.codice?.split('.')[0])===1 && foglia(c) && c.tipo!=='classe';
+  const banca = /banc|cassa|c\/c|conto corrente|postepay|paypal|carta|satispay|contant/i;
+  // conti sotto "Disponibilità liquide" + qualunque conto di Attività che per nome è cassa/banca (il piano reale può avere codici diversi)
+  let L = pianoConti.filter(c=>cl1(c) && ((radice && (c.id===radice.id || sotto(c,radice))) || banca.test(c.nome||'')));
+  if(!L.length) L = pianoConti.filter(cl1);
   return L.filter(c=>!c.soc || !soc || c.soc===soc).sort((a,b)=>(a.codice||'').localeCompare(b.codice||'')).map(c=>`${c.codice} — ${c.nome}`);
 }
 // conti dare/avere effettivi: la dicitura generica "Banca / Cassa" è sostituita dal conto scelto
@@ -5021,12 +5024,19 @@ function pnrPopolaFin(v1, v2){
   const box=document.getElementById('pnr-fin-box'), s1=document.getElementById('pnr-fin'), s2=document.getElementById('pnr-fin2');
   if(typeof v1!=='string') v1=s1.value; if(typeof v2!=='string') v2=s2.value;
   if(!c || !c.fin){ box.style.display='none'; s1.innerHTML=''; s2.innerHTML=''; return; }
-  const L=_pnrContiFin(soc), opt=(sel)=>'<option value="">— scegli il conto —</option>'+L.map(x=>`<option${x===sel?' selected':''}>${_pnrEsc(x)}</option>`).join('')+((sel&&!L.includes(sel))?`<option selected>${_pnrEsc(sel)}</option>`:'');
+  const L=_pnrContiFin(soc), opt=(sel)=>'<option value="">— scegli il conto —</option>'+L.map(x=>`<option${x===sel?' selected':''}>${_pnrEsc(x)}</option>`).join('')+((sel&&!L.includes(sel))?`<option selected>${_pnrEsc(sel)}</option>`:'')+'<option value="__altro">✏️ Altro conto (scrivilo a mano)…</option>';
   box.style.display='grid'; s1.innerHTML=opt(v1); s2.innerHTML=opt(v2);
   document.getElementById('pnr-fin2-row').style.display = c.fin==='entrambi'?'':'none';
   document.getElementById('pnr-fin-lbl').textContent = c.fin==='avere' ? 'Pagato da (conto da cui escono i soldi)' : c.fin==='dare' ? 'Incassato su (conto su cui entrano i soldi)' : 'Conto di origine (da cui escono)';
   document.getElementById('pnr-fin2-lbl').textContent = 'Conto di destinazione (su cui entrano)';
   box.style.gridTemplateColumns = c.fin==='entrambi' ? '1fr 1fr' : '1fr';
+}
+function pnrFinCambio(sel){
+  if(sel.value==='__altro'){
+    const t=(prompt('Scrivi il nome del conto (es. Banca BPER – c/c Virtus):')||'').trim();
+    if(t){ const o=new Option(t,t,true,true); sel.add(o, sel.options[sel.options.length-1]); sel.value=t; } else sel.value='';
+  }
+  pnrAnteprima();
 }
 function pnrAnteprima(){
   const n = parseInt(document.getElementById('pnr-caus').value)||0, c=_pnrC(n);
@@ -5037,7 +5047,11 @@ function pnrAnteprima(){
   lbl.innerHTML = c.scad ? 'Scadenza <span style="color:var(--rosso)">* obbligatoria</span>' : 'Scadenza <span style="font-weight:400;color:var(--text3)">(non richiesta)</span>';
   const contr=document.getElementById('pnr-contr').value.trim(), rif=document.getElementById('pnr-rif').value.trim();
   const da=_pnrDareAvere({causale:n, contoFin:document.getElementById('pnr-fin').value, contoFin2:document.getElementById('pnr-fin2').value});
-  prev.innerHTML = `<b>Descrizione:</b> ${_pnrEsc(c.nome)} – ${_pnrEsc(contr||'…')}${rif?' – '+_pnrEsc(rif):''}<br><b>Dare:</b> ${_pnrEsc(da.dare)} &nbsp;·&nbsp; <b>Avere:</b> ${_pnrEsc(da.avere)}`;
+  if(c.fin){ const sc='<span style="color:var(--rosso)">⚠ scegli il conto</span>';
+    if((c.fin==='avere'||c.fin==='entrambi') && !document.getElementById('pnr-fin').value) da.avere=sc;
+    if(c.fin==='dare' && !document.getElementById('pnr-fin').value) da.dare=sc;
+    if(c.fin==='entrambi' && !document.getElementById('pnr-fin2').value) da.dare=sc; }
+  prev.innerHTML = `<b>Descrizione:</b> ${_pnrEsc(c.nome)} – ${_pnrEsc(contr||'…')}${rif?' – '+_pnrEsc(rif):''}<br><b>Dare:</b> ${da.dare.startsWith('<span')?da.dare:_pnrEsc(da.dare)} &nbsp;·&nbsp; <b>Avere:</b> ${da.avere.startsWith('<span')?da.avere:_pnrEsc(da.avere)}`;
 }
 async function salvaPnr(){
   const v=k=>document.getElementById(k).value.trim(), id=v('pnr-id');
