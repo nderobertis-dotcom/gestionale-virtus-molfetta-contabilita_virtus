@@ -1732,12 +1732,18 @@ function buildMastrini(){
     const saldoLabel = (cl===1||cl===4) ? (saldo>=0?'D':'A') : (saldo>=0?'A':'D');
     const saldoClass = (cl===1||cl===4) ? (saldo>=0?'mastrino-saldo-dare':'mastrino-saldo-avere') : (saldo>=0?'mastrino-saldo-avere':'mastrino-saldo-dare');
 
+    // pagamenti segnati solo in scadenzario (senza scrittura in Prima Nota): dedotti dal residuo, mai dal saldo contabile
+    const senzaPN = scadenzario.filter(x=>x.contoId===conto.id && (x.saldatoSenzaPN||0)>0.001 && (!filtSoc||x.soc===filtSoc));
+    const totSenzaPN = Math.round(senzaPN.reduce((a,x)=>a+x.saldatoSenzaPN,0)*100)/100;
+    const residuoEff = saldo - totSenzaPN;
+    const residuoLab = residuoEff>=0 ? saldoLabel : (saldoLabel==='D'?'A':'D');
     return `<div class="mastrino${_mastAperti.has(conto.id)?'':' chiuso'}" data-cid="${conto.id}">
       <div class="mastrino-header" style="cursor:pointer;background:${MAST_COLORI[_mastTipo(conto)]};--mc:${MAST_COLORI[_mastTipo(conto)]}" onclick="toggleMastrino('${conto.id}')" title="Clic per aprire/chiudere il conto">
         <span><span class="mast-freccia" style="display:inline-block;width:14px">${_mastAperti.has(conto.id)?'▾':'▸'}</span>${conto.codice} — ${conto.nome} <span style="font-weight:400;opacity:.7;font-size:10px">(${movimenti.length} mov.)</span></span>
         <div style="display:flex;align-items:center;gap:.6rem">
           <button class="btn no-print" style="font-size:9px;padding:1px 8px" title="PDF di questo solo mastrino" onclick="event.stopPropagation();pdfMastrini('${conto.id}')">📄 PDF</button>
           <span>Saldo: ${fmt(Math.abs(saldo))} ${saldoLabel}</span>
+          ${totSenzaPN?`<span style="background:#FFF3CD;color:#6B4E00;border-radius:10px;padding:1px 8px;font-size:10px" title="Pagamenti segnati nello scadenzario ma non registrati in Prima Nota: ${fmt(totSenzaPN)}">Residuo effettivo: ${fmt(Math.abs(residuoEff))} ${residuoLab}</span>`:''}
           ${isContoRateabile(conto.id)?`<span style="font-size:9px;color:rgba(255,255,255,.6)" title="Ogni voce ha un proprio piano rate: usa l'icona 📅 sulla singola riga">📅 per riga</span>`:''}
         </div>
       </div>
@@ -1775,10 +1781,21 @@ function buildMastrini(){
         <div class="mastrino-td ${saldoClass}" style="background:var(--bg3)">${fmt(Math.abs(saldo))} ${saldoLabel}</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
       </div>
+      ${totSenzaPN?`<div style="background:#FFF8E1;border-top:1px solid #F0D98A;padding:.5rem .8rem;font-size:11px;color:#5C4400">
+        <b>Pagato in scadenzario, non registrato in Prima Nota: ${fmt(totSenzaPN)}</b> — saldo contabile ${fmt(Math.abs(saldo))} ${saldoLabel} · residuo effettivo <b>${fmt(Math.abs(residuoEff))} ${residuoLab}</b>
+        ${senzaPN.map(x=>`<div style="display:flex;justify-content:space-between;gap:.6rem;margin-top:3px"><span>${x.controparte||''} · rata ${x.nRata||''}/${x.totRate||''} · ${fmt(x.saldatoSenzaPN)}${x.dataPagamento?' · '+fmtData(x.dataPagamento):''}</span><button class="btn no-print" style="font-size:10px;padding:1px 8px" title="Hai registrato questo pagamento in Prima Nota: toglie la deduzione per non contarlo due volte" onclick="pagamentoRegistratoInPN('${x.id}')">✔ Registrato in Prima Nota</button></div>`).join('')}
+      </div>`:''}
     </div>`;
   }).join('');
 }
 
+async function pagamentoRegistratoInPN(scadId){
+  const x = scadenzario.find(v=>v.id===scadId); if(!x) return;
+  if(!confirm('Confermi che il pagamento di '+fmt(x.saldatoSenzaPN)+' è stato registrato in Prima Nota? Il residuo effettivo smetterà di dedurlo (altrimenti verrebbe contato due volte).')) return;
+  x.saldatoSenzaPN = 0;
+  const piano = pianiRateazione.find(p=>p.id===x.pianoId), rata = piano?.rate.find(r=>r.id===x.id); if(rata) rata.saldatoSenzaPN = 0;
+  buildMastrini(); if(window.salvaEAggiorna) await window.salvaEAggiorna();
+}
 function buildMastrinoRate(contoId){
   const piani = pianiRateazione.filter(p=>p.contoId===contoId);
   if(!piani.length) return '';
@@ -2130,6 +2147,7 @@ function generaRigheRate(){
       scadenza: data,
       importo: i===n-1 ? ultima : rataBase,
       saldato: _righeRate[i]?.saldato||0,
+      saldatoSenzaPN: _righeRate[i]?.saldatoSenzaPN||0,
       stato:   _righeRate[i]?.stato||'aperto'
     };
   });
@@ -2210,7 +2228,7 @@ function correggiSaldatoRata(i){
   if(v===null) return;
   const n = Math.round((parseFloat(String(v).replace(',','.'))||0)*100)/100;
   if(n<0 || n>(parseFloat(r.importo)||0)+0.01){ alert('Importo non valido: deve essere tra 0 e '+fmt(r.importo)+'.'); return; }
-  r.saldato = n;
+  r.saldato = n; if((r.saldatoSenzaPN||0)>n) r.saldatoSenzaPN = n;   // la quota non registrata non può superare il saldato
   if(n>=(parseFloat(r.importo)||0)-0.01){ r.stato='pagato'; if(!r.dataPagamento) r.dataPagamento=new Date().toISOString().slice(0,10); }
   else { r.stato = n>0 ? 'parziale' : 'aperto'; delete r.dataPagamento; }
   if(!_persistiPianoDaModal()) return;
@@ -2253,6 +2271,7 @@ function aggiornaSacadenzarioDaPiano(piano){
       controparte: piano.desc,
       importo:  r.importo,
       saldato:  r.saldato||0,
+      saldatoSenzaPN: r.saldatoSenzaPN||0,
       scadenza: r.scadenza,
       stato:    r.stato||'aperto',
       nRata:    i+1,      // numero intero esplicito
@@ -2385,13 +2404,14 @@ async function saldaSoloScadenzario(){
   const importo = parseFloat(document.getElementById('salda-importo').value)||s.importo;
   const oggi_s = new Date().toISOString().slice(0,10);
   s.saldato = (s.saldato||0)+importo;
+  s.saldatoSenzaPN = Math.round(((s.saldatoSenzaPN||0)+importo)*100)/100;   // pagato ma NON registrato in Prima Nota: il mastrino lo deduce dal residuo
   s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
   if(s.stato==='pagato') s.dataPagamento = oggi_s;
   // Aggiorna anche il piano
   const piano_s = pianiRateazione.find(p=>p.id===s.pianoId);
   if(piano_s){
     const rata_s = piano_s.rate.find(r=>r.id===s.id);
-    if(rata_s){ rata_s.saldato=(rata_s.saldato||0)+importo; rata_s.stato=s.stato; if(s.stato==='pagato') rata_s.dataPagamento=oggi_s; }
+    if(rata_s){ rata_s.saldato=(rata_s.saldato||0)+importo; rata_s.saldatoSenzaPN=s.saldatoSenzaPN; rata_s.stato=s.stato; if(s.stato==='pagato') rata_s.dataPagamento=oggi_s; }
   }
   chiudiModal('modal-salda');
   buildScadenzario();
@@ -3670,6 +3690,7 @@ async function cambiaRuoloUtente(uid,ruolo){
       <button class="btn btn-dark" onclick="saldaConPrimaNota()" style="flex:1">📒 Crea registrazione in Prima Nota</button>
       <button class="btn" onclick="saldaSoloScadenzario()" style="flex:1">✓ Segna solo come saldata</button>
     </div>
+    <div style="font-size:10.5px;color:var(--text3);margin:-.3rem 0 .8rem">“Solo come saldata” non crea scritture: nel mastrino l'importo risulta come <b>pagato non registrato</b> e viene dedotto dal residuo, finché non registri il pagamento in Prima Nota.</div>
     <div id="salda-pn-form" style="display:none">
       <div class="form-row">
         <label class="form-label">Data incasso/pagamento</label>
