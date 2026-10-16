@@ -601,7 +601,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
           <option value="4">4 — Costi</option>
           <option value="5">5 — Ricavi</option>
         </select>
-        <input type="text" id="mast-search" class="form-input" placeholder="🔍 Cerca conto..." style="width:180px" oninput="buildMastrini()">
+        <input type="text" id="mast-search" class="form-input" placeholder="🔍 Cerca conto (più termini: ry, voli)" title="Più ricerche insieme separate da virgola. I conti aperti restano sempre visibili." style="width:250px" oninput="buildMastrini()">
         <button class="btn no-print" onclick="mastEspandi(true)">▾ Apri tutti</button>
         <button class="btn no-print" onclick="mastEspandi(false)">▸ Chiudi tutti</button>
         <button class="btn btn-dark perm-admin no-print" onclick="apriModalPrimaNotaDaMastrini()">+ Nuova Registrazione</button>
@@ -1653,6 +1653,13 @@ function apriRateazioneApertura(bid){
 // ══════════════════════════════════════════════════════════════
 // MASTRINI
 // ══════════════════════════════════════════════════════════════
+// ricerca: più termini separati da virgola (es. "ry, voli"); i conti già aperti restano sempre in elenco, anche se non corrispondono all'ultima ricerca
+function _mastCerca(c, search){
+  const termini = (search||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean);
+  if(!termini.length || _mastAperti.has(c.id)) return true;
+  const nome=(c.nome||'').toLowerCase(), cod=(c.codice||'').toLowerCase();
+  return termini.some(t=>nome.includes(t)||cod.includes(t));
+}
 let _mastAperti = new Set();   // conti aperti: sopravvive ai ricaricamenti dell'elenco
 function toggleMastrino(id){
   if(_mastAperti.has(id)) _mastAperti.delete(id); else _mastAperti.add(id);
@@ -1684,7 +1691,7 @@ function buildMastrini(){
   const contiDaMostrare = pianoConti.filter(c=>{
     if(!contiUsati.has(c.id)) return false;
     if(filtClasse && String(c.classe||c.codice?.split('.')[0])!==filtClasse) return false;
-    if(search && !c.nome.toLowerCase().includes(search) && !c.codice?.includes(search)) return false;
+    if(!_mastCerca(c, search)) return false;
     return true;
   }).sort((a,b)=>a.codice?.localeCompare(b.codice));
 
@@ -5157,7 +5164,7 @@ function pdfMastrini(soloContoId){
   if(soloContoId) conti = conti.filter(c=>c.id===soloContoId);
   else conti = conti.filter(c=>{
     if(filtClasse && String(c.classe||c.codice?.split('.')[0])!==filtClasse) return false;
-    if(search && !c.nome.toLowerCase().includes(search) && !(c.codice||'').includes(search)) return false;
+    if(!_mastCerca(c, search)) return false;
     return true;
   });
   conti.sort((a,b)=>(a.codice||'').localeCompare(b.codice||''));
