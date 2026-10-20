@@ -665,8 +665,8 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
     <div id="page-scadenzario" class="page">
       <div class="page-header">
         <div class="page-title">📅 Scadenzario</div>
-        <div class="page-sub">Crediti e debiti con scadenza — da registrazioni con data scadenza</div>
-      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('scadenzario')" style="font-size:11px">🖨️ Stampa / PDF</button></div>
+        <div class="page-sub">Partite aperte: fatture di vendita (clienti) e fornitori. I pagamenti non generano scadenze.</div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('scadenzario')" style="font-size:11px">🖨️ Stampa / PDF</button> <button class="btn perm-admin" onclick="ripulisciScadenzeNonValide()" style="font-size:11px" title="Rimuove dallo scadenzario le voci nate da pagamenti, incassi, IVA o soci: restano solo clienti e fornitori">🧹 Ripulisci voci non valide</button> <button class="btn btn-dark perm-admin" onclick="apriChiudiPartite()" style="font-size:11px" title="Abbina pagamenti e incassi già registrati in Prima Nota alle partite aperte">🔗 Chiudi partite</button></div>
       </div>
 
       <div class="crm-toggle no-print">
@@ -1070,6 +1070,24 @@ function isContoRateabile(contoId){
   return false;
 }
 
+// PARTITE: lo scadenzario riguarda solo clienti (fatture di vendita) e fornitori. Escluse IVA, tributi, ritenute, soci.
+function isContoPartita(contoId){
+  if(!isContoRateabile(contoId)) return false;
+  const c = pianoConti.find(x=>x.id===contoId); if(!c) return false;
+  const cod = c.codice||'', nome = c.nome||'';
+  if(cod.startsWith('2.4') || cod==='1.2.2') return false;
+  if(/\biva\b|erario|tribut|ritenut|inps|inail|\bsoci?\b/i.test(nome)) return false;
+  return true;
+}
+// una riga APRE una partita solo se è dal lato "naturale": credito = DARE (il cliente ci deve), debito = AVERE (dobbiamo al fornitore).
+// Le righe dal lato opposto sono pagamenti/incassi/storni: chiudono, non aprono, quindi niente scadenza.
+function isRigaApertura(riga){
+  if(!riga || !isContoPartita(riga.contoId)) return false;
+  const c = pianoConti.find(x=>x.id===riga.contoId);
+  const cl = parseInt(c.classe||c.codice?.split('.')[0]);
+  return cl===1 ? (riga.dare||0)>0 : (riga.avere||0)>0;
+}
+
 function getTipoRateazione(contoId){
   const c = pianoConti.find(x=>x.id===contoId);
   if(!c) return null;
@@ -1306,7 +1324,7 @@ function openModalPrimaNota(id){
 function renderPDRighe(){
   const cont = document.getElementById('pd-righe');
   cont.innerHTML = _pdRighe.map((r,i)=>{
-    const rateabile = isContoRateabile(r.contoId);
+    const rateabile = isRigaApertura(r);
     return `
     <div style="display:grid;grid-template-columns:80px 1fr 26px 120px 120px 110px 28px;gap:.4rem;margin-bottom:.35rem;align-items:center">
       <select class="form-input" style="font-size:11px;padding:5px 6px" onchange="_pdRighe[${i}].tipo=this.value;aggiornaSaldoPD()">
@@ -1327,7 +1345,7 @@ function renderPDRighe(){
         placeholder="0" oninput="_pdRighe[${i}].avere=parseFloat(this.value)||0;aggiornaSaldoPD()">
       <input type="date" class="form-input" value="${r.scadenza||''}"
         style="font-size:10px;padding:4px 5px;${rateabile?'border-color:#1565C0;':'opacity:.35;'}"
-        title="${rateabile?'Data scadenza per questo conto':'Scadenza solo per conti crediti/debiti'}"
+        title="${rateabile?'Data scadenza della partita (fattura cliente o fornitore)':'Scadenza solo per righe che aprono un credito (dare cliente) o un debito (avere fornitore)'}"
         oninput="_pdRighe[${i}].scadenza=this.value">
       <button class="btn-del" onclick="_pdRighe.splice(${i},1);renderPDRighe()" style="padding:2px 6px">✕</button>
     </div>`;
@@ -1392,7 +1410,7 @@ async function salvaPrimaNota(){
   }
 
   // Aggiorna scadenzario per righe con scadenza per riga O scadenza globale
-  const hasRigheScad = rec.righe.some(r=>r.scadenza&&isContoRateabile(r.contoId));
+  const hasRigheScad = rec.righe.some(r=>r.scadenza&&isRigaApertura(r));
   if(hasRigheScad || rec.scadenza) aggiornaScadenzario(rec);
 
   chiudiModal('modal-primanota');
@@ -1411,6 +1429,7 @@ async function salvaPrimaNota(){
       const _eff = Math.round(rec.righe.filter(g=>g.contoId===s.contoId).reduce((a,g)=>a+((s.tipo==='credito'?g.avere:g.dare)||0),0)*100)/100;
       const saldaImporto = _eff>0 ? _eff : saldaImportoProposto;
       s.saldato = (s.saldato||0)+saldaImporto;
+      (s.abbinamenti=s.abbinamenti||[]).push({id:genId(), regId:rec.id, contoId:s.contoId, importo:saldaImporto, daSenzaPN:0, data:rec.data});   // il pagamento è già abbinato: non verrà riproposto
       s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
       if(s.stato==='pagato') s.dataPagamento = document.getElementById('pn-data').value||new Date().toISOString().slice(0,10);
       const piano = pianiRateazione.find(p=>p.id===s.pianoId);
@@ -1429,7 +1448,7 @@ async function salvaPrimaNota(){
   // e solo se non stiamo saldando una rata già esistente — in quel caso non ha senso
   // proporne subito un'altra per lo stesso conto)
   if(!_editRegId && !saldaRataId){
-    const contiRateabili = rec.righe.filter(r=>isContoRateabile(r.contoId));
+    const contiRateabili = rec.righe.filter(r=>isRigaApertura(r));
     if(contiRateabili.length>0){
       const cr = contiRateabili[0];
       const importo = cr.dare||cr.avere;
@@ -1445,7 +1464,7 @@ async function salvaPrimaNota(){
 function aggiornaScadenzario(reg){
   // Crea/aggiorna voci scadenzario per ogni riga con conto crediti/debiti
   reg.righe.forEach(riga=>{
-    if(!isContoRateabile(riga.contoId)) return;
+    if(!isRigaApertura(riga)) return;   // pagamenti/incassi non generano partite
     const conto = pianoConti.find(c=>c.id===riga.contoId);
     if(!conto) return;
     const cl = parseInt(conto.codice?.split('.')[0]);
@@ -1467,6 +1486,33 @@ function aggiornaScadenzario(reg){
       });
     }
   });
+  // voci create in precedenza da righe che ora non aprono più una partita (registrazione modificata): via, se intatte
+  scadenzario = scadenzario.filter(x=>{
+    if(x.regId!==reg.id || x.pianoId || (x.saldato||0)>0) return true;
+    return reg.righe.some(r=>r.contoId===x.contoId && isRigaApertura(r));
+  });
+}
+
+// Voci di scadenzario che non sono partite valide (create da pagamenti/incassi, IVA, soci...): elenco e rimozione, solo se intatte (nessun piano, nulla saldato)
+function _scadenzeNonValide(){
+  return scadenzario.filter(x=>{
+    if(x.pianoId || (x.saldato||0)>0 || (x.saldatoSenzaPN||0)>0) return false;
+    if(!isContoPartita(x.contoId)) return true;
+    const reg = registrazioni.find(r=>r.id===x.regId);
+    if(!reg) return false;                       // voce manuale/di apertura: non si tocca
+    return !reg.righe.some(r=>r.contoId===x.contoId && isRigaApertura(r));
+  });
+}
+async function ripulisciScadenzeNonValide(){
+  const L = _scadenzeNonValide();
+  if(!L.length){ alert('Nessuna voce da ripulire: lo scadenzario contiene solo partite di clienti e fornitori.'); return; }
+  const tot = L.reduce((a,x)=>a+(x.importo||0),0);
+  const elenco = L.slice(0,12).map(x=>'• '+fmtData(x.scadenza)+' · '+(x.controparte||'')+' · '+fmt(x.importo)).join('\n')+(L.length>12?'\n… e altre '+(L.length-12):'');
+  if(!confirm('Voci di scadenzario che non sono partite valide (pagamenti, incassi, IVA, soci…): '+L.length+' per '+fmt(tot)+'.\n\n'+elenco+'\n\nRimuoverle? Le registrazioni in Prima Nota NON vengono toccate.')) return;
+  const ids = new Set(L.map(x=>x.id));
+  scadenzario = scadenzario.filter(x=>!ids.has(x.id));
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario();
 }
 
 function renderPrimaNota(){
@@ -1580,7 +1626,7 @@ function renderBilancioApertura(){
 
   const tbody = document.getElementById('tbody-apertura');
   tbody.innerHTML = voci.map((b,i)=>{
-    const rateabile = isContoRateabile(b.contoId);
+    const rateabile = isContoPartita(b.contoId);
     const piano     = pianiRateazione.find(p=>p.regId==='apertura_'+b.id);
     const haPiano   = !!piano;
 
@@ -1744,7 +1790,7 @@ function buildMastrini(){
           <button class="btn no-print" style="font-size:9px;padding:1px 8px" title="PDF di questo solo mastrino" onclick="event.stopPropagation();pdfMastrini('${conto.id}')">📄 PDF</button>
           <span>Saldo: ${fmt(Math.abs(saldo))} ${saldoLabel}</span>
           ${totSenzaPN?`<span style="background:#FFF3CD;color:#6B4E00;border-radius:10px;padding:1px 8px;font-size:10px" title="Pagamenti segnati nello scadenzario ma non registrati in Prima Nota: ${fmt(totSenzaPN)}">Residuo effettivo: ${fmt(Math.abs(residuoEff))} ${residuoLab}</span>`:''}
-          ${isContoRateabile(conto.id)?`<span style="font-size:9px;color:rgba(255,255,255,.6)" title="Ogni voce ha un proprio piano rate: usa l'icona 📅 sulla singola riga">📅 per riga</span>`:''}
+          ${isContoPartita(conto.id)?`<span style="font-size:9px;color:rgba(255,255,255,.6)" title="Ogni voce ha un proprio piano rate: usa l'icona 📅 sulla singola riga">📅 per riga</span>`:''}
         </div>
       </div>
       <div class="mastrino-body" style="grid-template-columns:auto 1fr 120px 120px 120px 100px">
@@ -1761,7 +1807,8 @@ function buildMastrini(){
           }
           const spLabel = (cl===1||cl===4) ? (saldoProg>=0?'D':'A') : (saldoProg>=0?'A':'D');
           const spClass = (cl===1||cl===4) ? (saldoProg>=0?'mastrino-saldo-dare':'mastrino-saldo-avere') : (saldoProg>=0?'mastrino-saldo-avere':'mastrino-saldo-dare');
-          const rateBtn = isContoRateabile(conto.id)
+          const _apre = isContoPartita(conto.id) && (cl===1 ? m.dare>0 : m.avere>0);   // solo le righe che aprono una partita
+          const rateBtn = _apre
             ? (m.tipo==='apertura'
                 ? `<button class="btn" style="font-size:9px;padding:1px 6px" title="Piano rate per questa voce" onclick="apriRateazioneApertura('${m.id}')">📅</button>`
                 : `<button class="btn" style="font-size:9px;padding:1px 6px" title="Piano rate per questa registrazione" onclick="apriModalRateazione('${m.regId}','${conto.id}')">📅</button>`)
@@ -2256,7 +2303,8 @@ function saldaRataDaModal(i){
 }
 
 function aggiornaSacadenzarioDaPiano(piano){
-  // Rimuovi vecchie scadenze di questo piano
+  // Rimuovi vecchie scadenze di questo piano (conservando gli abbinamenti ai pagamenti)
+  const _vecchie = new Map(scadenzario.filter(s=>s.pianoId===piano.id).map(s=>[s.id,s]));
   scadenzario = scadenzario.filter(s=>s.pianoId!==piano.id);
   // Aggiungi nuove
   piano.rate.forEach((r,i)=>{
@@ -2272,6 +2320,7 @@ function aggiornaSacadenzarioDaPiano(piano){
       importo:  r.importo,
       saldato:  r.saldato||0,
       saldatoSenzaPN: r.saldatoSenzaPN||0,
+      abbinamenti: _vecchie.get(r.id)?.abbinamenti||[],
       scadenza: r.scadenza,
       stato:    r.stato||'aperto',
       nRata:    i+1,      // numero intero esplicito
@@ -2453,6 +2502,7 @@ async function confermaSaldaConPN(){
   registrazioni.push(reg);
 
   // Aggiorna stato rata
+  (s.abbinamenti=s.abbinamenti||[]).push({id:genId(), regId:reg.id, contoId:s.contoId, importo, daSenzaPN:0, data:reg.data});
   s.saldato = (s.saldato||0)+importo;
   s.stato = s.saldato>=(s.importo-0.01)?'pagato':'parziale';
   if(s.stato==='pagato') s.dataPagamento = data;
@@ -2604,7 +2654,7 @@ function buildScadenzarioSintetico(){
   // questo calcolo semplice non separa le due quote — l'intero conto risulta "pianificato"
   // appena esiste almeno un piano. Se ti serve la scomposizione anche in quel caso, dimmelo.
   const contiNonPianificati = pianoConti
-    .filter(c=>isContoRateabile(c.id))
+    .filter(c=>isContoPartita(c.id))
     .filter(c=>scadContoCorrisponde(c.id, filtContoTesto))
     .filter(c=>{
       const tipoC = getTipoRateazione(c.id);
@@ -3821,6 +3871,24 @@ async function cambiaRuoloUtente(uid,ruolo){
 </div>
 
 <!-- MODAL UPLOAD FATTURA PASSIVA -->
+<div class="modal-overlay" id="modal-chiudi-partite" onclick="if(event.target===this)chiudiModal('modal-chiudi-partite')">
+  <div class="modal" style="width:1100px;max-width:97vw">
+    <div class="modal-title">🔗 Chiudi partite — abbina pagamenti e incassi alle partite aperte</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">Un pagamento (o un incasso) già registrato in Prima Nota chiude le fatture aperte dello stesso conto e della stessa società. Non viene creata nessuna nuova registrazione: l'abbinamento aggiorna solo lo scadenzario ed è annullabile.</div>
+    <div class="toolbar" style="margin-bottom:.5rem">
+      <select id="cpv-tipo" class="form-input" style="width:auto" onchange="cpvVista(null)"><option value="debito">Passive — fornitori (pagamenti)</option><option value="credito">Attive — clienti/sponsor (incassi)</option></select>
+      <select id="cpv-soc" class="form-input" style="width:auto" onchange="cpvVista(null)"><option value="">Tutte le società</option><option>VIRTUS</option><option>DINAMO</option><option>INVICTA</option></select>
+      <input type="text" id="cpv-q" class="form-input" placeholder="🔍 Cerca conto..." style="width:200px" oninput="cpvVista(null)">
+      <button class="btn" id="cpv-back" style="display:none" onclick="cpvVista(null)">← Torna all'elenco per conto</button>
+    </div>
+    <div id="cpv-body" style="max-height:56vh;overflow:auto"></div>
+    <div id="cpv-foot" style="font-size:12px;color:var(--text2);margin:.6rem 0"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-chiudi-partite')">Chiudi</button>
+      <button class="btn btn-dark" id="cpv-btn" style="display:none" onclick="cpvAbbina()" disabled>Abbina</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-pnr" onclick="if(event.target===this)chiudiModal('modal-pnr')">
   <div class="modal" style="width:560px">
     <div class="modal-title" id="pnr-title">✍️ Nuova registrazione</div>
@@ -5272,6 +5340,154 @@ function pdfMastrini(soloContoId){
   for(let p=1;p<=tot;p++){ doc.setPage(p); doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(120); doc.text('Pag. '+p+' / '+tot, R, H-7, {align:'right'}); doc.text('D = dare · A = avere · saldo nel lato naturale del conto', M, H-7); }
   const nome = soloContoId ? 'Mastrino_'+(conti[0].codice||'').replace(/[^\w.]+/g,'-') : 'Mastrini'+(filtSoc?'_'+filtSoc:'');
   doc.save(nome+'_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+
+// ══ CHIUSURA PARTITE: abbina pagamenti/incassi (già in Prima Nota) alle partite aperte dello scadenzario ══
+// Una "partita" è una voce di scadenzario. Un "pagamento" è la riga di una registrazione dal lato che chiude (debito: dare; credito: avere)
+// su un conto cliente/fornitore. L'abbinamento sposta importo dal pagamento alla partita (s.abbinamenti) senza creare scritture.
+let _cpv = {conto:null, regId:null, alloc:{}};
+const _cpvCl = c => parseInt(c.classe||c.codice?.split('.')[0]);
+function _cpvAbbinato(regId, contoId){
+  let t=0; scadenzario.forEach(x=>(x.abbinamenti||[]).forEach(a=>{ if(a.regId===regId && a.contoId===contoId) t+=a.importo||0; }));
+  return Math.round(t*100)/100;
+}
+function _cpvPagamenti(contoId, soc){
+  const c = pianoConti.find(x=>x.id===contoId); if(!c) return [];
+  const cl=_cpvCl(c), out=[];
+  registrazioni.forEach(r=>{
+    if(soc && r.soc!==soc) return; if(r.pagamentoConteggiato) return;
+    const tot = Math.round((r.righe||[]).filter(g=>g.contoId===contoId).reduce((a,g)=>a+((cl===1?g.avere:g.dare)||0),0)*100)/100;
+    if(tot<=0.009) return;
+    const disp = Math.round((tot-_cpvAbbinato(r.id,contoId))*100)/100;
+    if(disp>0.009) out.push({reg:r, tot, disp});
+  });
+  return out.sort((a,b)=>(a.reg.data||'').localeCompare(b.reg.data||''));
+}
+const _cpvCapacita = x => Math.round(((x.importo||0)-(x.saldato||0)+(x.saldatoSenzaPN||0))*100)/100;   // quanto si può ancora chiudere (compreso il "pagato non registrato")
+function _cpvPartite(contoId, soc){
+  return scadenzario.filter(x=>x.contoId===contoId && (!soc||x.soc===soc) && _cpvCapacita(x)>0.009).sort((a,b)=>(a.scadenza||'').localeCompare(b.scadenza||''));
+}
+function apriChiudiPartite(){
+  document.getElementById('cpv-soc').value=''; document.getElementById('cpv-q').value='';
+  _cpv = {conto:null, regId:null, alloc:{}}; cpvVista(null); apriModal('modal-chiudi-partite');
+}
+function cpvVista(contoId){
+  _cpv.conto = contoId; _cpv.regId = null; _cpv.alloc = {};
+  document.getElementById('cpv-back').style.display = contoId?'':'none';
+  document.getElementById('cpv-btn').style.display = contoId?'':'none';
+  contoId ? cpvDettaglio() : cpvElenco();
+}
+function cpvElenco(){
+  const tipo=document.getElementById('cpv-tipo').value, soc=document.getElementById('cpv-soc').value, q=document.getElementById('cpv-q').value.toLowerCase().trim();
+  const cl = tipo==='credito'?1:2;
+  const ids = new Set();
+  scadenzario.forEach(x=>{ if(x.tipo===tipo && x.contoId) ids.add(x.contoId); });
+  pianoConti.forEach(c=>{ if(isContoPartita(c.id) && _cpvCl(c)===cl && registrazioni.some(r=>(r.righe||[]).some(g=>g.contoId===c.id))) ids.add(c.id); });
+  const righe = [...ids].map(id=>{
+    const c=pianoConti.find(x=>x.id===id); if(!c||_cpvCl(c)!==cl) return null;
+    if(q && !((c.nome||'')+' '+(c.codice||'')).toLowerCase().includes(q)) return null;
+    const P=_cpvPartite(id,soc), G=_cpvPagamenti(id,soc);
+    const aperto=P.reduce((a,x)=>a+_cpvCapacita(x),0), daAbb=G.reduce((a,g)=>a+g.disp,0);
+    const scaduto=P.filter(x=>x.scadenza&&x.scadenza<new Date().toISOString().slice(0,10)).reduce((a,x)=>a+_cpvCapacita(x),0);
+    if(!P.length && !G.length) return null;
+    return {c,P,G,aperto,daAbb,scaduto};
+  }).filter(Boolean).sort((a,b)=>((b.P.length&&b.G.length)-(a.P.length&&a.G.length))||(a.c.nome||'').localeCompare(b.c.nome||''));
+  document.getElementById('cpv-foot').textContent = '';
+  if(!righe.length){ document.getElementById('cpv-body').innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3)">Nessuna partita aperta né pagamento da abbinare con questi filtri.</div>'; return; }
+  document.getElementById('cpv-body').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Conto</th><th style="text-align:right">Partite aperte</th><th style="text-align:right">di cui scadute</th><th style="text-align:right">${tipo==='credito'?'Incassi':'Pagamenti'} da abbinare</th><th></th></tr></thead><tbody>
+    ${righe.map(r=>{ const pronto=r.P.length&&r.G.length; return `<tr style="${pronto?'':'opacity:.65'}">
+      <td style="font-weight:600">${_pnrEsc(r.c.codice)} — ${_pnrEsc(r.c.nome)}</td>
+      <td class="num">${r.P.length} · ${fmt(r.aperto)}</td>
+      <td class="num" style="color:${r.scaduto?'var(--rosso)':'var(--text3)'}">${r.scaduto?fmt(r.scaduto):'—'}</td>
+      <td class="num">${r.G.length} · ${fmt(r.daAbb)}</td>
+      <td><button class="btn ${pronto?'btn-dark':''}" style="font-size:11px;padding:3px 12px" onclick="cpvVista('${r.c.id}')">Apri</button></td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div style="font-size:10.5px;color:var(--text3);margin-top:.4rem">I conti con partite aperte <b>e</b> pagamenti da abbinare sono in evidenza.</div>`;
+}
+function cpvDettaglio(){
+  const soc=document.getElementById('cpv-soc').value, id=_cpv.conto, c=pianoConti.find(x=>x.id===id), tipo=document.getElementById('cpv-tipo').value;
+  const G=_cpvPagamenti(id,soc), P=_cpvPartite(id,soc);
+  const abbin=[]; scadenzario.filter(x=>x.contoId===id && (!soc||x.soc===soc)).forEach(x=>(x.abbinamenti||[]).forEach(a=>abbin.push({x,a})));
+  const lbl = tipo==='credito'?'Incassi':'Pagamenti';
+  document.getElementById('cpv-body').innerHTML = `
+    <div style="font-weight:700;margin-bottom:.4rem">${_pnrEsc(c.codice)} — ${_pnrEsc(c.nome)}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin:.4rem 0 .2rem">1 · Scegli il ${tipo==='credito'?'incasso':'pagamento'} da abbinare</div>
+    ${G.length?`<div class="tbl-wrap"><table><thead><tr><th></th><th>Data</th><th>Soc.</th><th>Descrizione</th><th style="text-align:right">Importo</th><th style="text-align:right">Da abbinare</th><th></th></tr></thead><tbody>
+      ${G.map(g=>`<tr><td><input type="radio" name="cpv-pag" onchange="cpvScegli('${g.reg.id}')"></td><td>${fmtData(g.reg.data)}</td><td>${_pnrEsc(g.reg.soc)}</td><td>${_pnrEsc(g.reg.desc||'')}${g.reg.rif?' ('+_pnrEsc(g.reg.rif)+')':''}</td><td class="num">${fmt(g.tot)}</td><td class="num" style="font-weight:700">${fmt(g.disp)}</td>
+      <td><button class="btn" style="font-size:10px;padding:1px 8px" title="Questo pagamento è già stato conteggiato come saldo di una rata: lo escludo dall'elenco" onclick="cpvConteggiato('${g.reg.id}')">già conteggiato</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div style="padding:.6rem;color:var(--text3);font-size:12px">Nessun ${tipo==='credito'?'incasso':'pagamento'} da abbinare su questo conto.</div>`}
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin:.8rem 0 .2rem">2 · Partite da chiudere <span style="font-weight:400;color:var(--text3)">(proposta: dalla più vecchia; puoi modificare gli importi)</span></div>
+    ${P.length?`<div class="tbl-wrap"><table><thead><tr><th>Scadenza</th><th>Soc.</th><th>Partita</th><th style="text-align:right">Importo</th><th style="text-align:right">Residuo</th><th style="text-align:right">Chiudi con €</th></tr></thead><tbody>
+      ${P.map(x=>`<tr><td style="white-space:nowrap">${fmtData(x.scadenza)}</td><td>${_pnrEsc(x.soc)}</td><td>${_pnrEsc(x.controparte||'')}${x.nRata?` · rata ${x.nRata}/${x.totRate||''}`:''}${(x.saldatoSenzaPN||0)>0?` <span title="Segnata come pagata senza registrazione: l'abbinamento la regolarizza" style="color:#8A6D00;font-size:10px">(pagato non registrato ${fmt(x.saldatoSenzaPN)})</span>`:''}</td>
+      <td class="num">${fmt(x.importo)}</td><td class="num">${fmt(_cpvCapacita(x))}</td>
+      <td style="text-align:right"><input type="number" step="0.01" min="0" class="form-input" style="width:110px;text-align:right;font-size:11px;padding:3px 6px" id="cpv-a-${x.id}" oninput="cpvAggiorna()" disabled></td></tr>`).join('')}</tbody></table></div>`
+      : `<div style="padding:.6rem;color:var(--text3);font-size:12px">Nessuna partita aperta su questo conto${soc?' per '+soc:''}.</div>`}
+    ${abbin.length?`<div style="font-size:11px;font-weight:700;color:var(--text2);margin:.8rem 0 .2rem">Abbinamenti già fatti</div><div class="tbl-wrap"><table><tbody>
+      ${abbin.map(({x,a})=>{ const r=registrazioni.find(v=>v.id===a.regId); return `<tr><td>${fmtData(a.data)}</td><td>${_pnrEsc(r?.desc||'(registrazione eliminata)')}</td><td>→ ${_pnrEsc(x.controparte||'')}${x.nRata?' · rata '+x.nRata:''}</td><td class="num">${fmt(a.importo)}</td><td><button class="btn" style="font-size:10px;padding:1px 8px" onclick="cpvAnnulla('${x.id}','${a.id}')">↩ Annulla</button></td></tr>`;}).join('')}</tbody></table></div>`:''}`;
+  document.getElementById('cpv-foot').textContent=''; document.getElementById('cpv-btn').disabled=true;
+}
+function cpvScegli(regId){
+  _cpv.regId=regId;
+  const id=_cpv.conto, soc=document.getElementById('cpv-soc').value;
+  const g=_cpvPagamenti(id,soc).find(x=>x.reg.id===regId); if(!g) return;
+  let resto=g.disp;
+  _cpvPartite(id,soc).forEach(x=>{
+    const inp=document.getElementById('cpv-a-'+x.id); if(!inp) return;
+    const ok = x.soc===g.reg.soc;                         // si abbina solo nella stessa società
+    inp.disabled=!ok; const v = ok ? Math.min(resto,_cpvCapacita(x)) : 0; inp.value = v>0.009 ? v.toFixed(2) : ''; resto=Math.round((resto-v)*100)/100;
+  });
+  cpvAggiorna();
+}
+function cpvAggiorna(){
+  const id=_cpv.conto, soc=document.getElementById('cpv-soc').value;
+  const g=_cpvPagamenti(id,soc).find(x=>x.reg.id===_cpv.regId); if(!g) return;
+  let tot=0, errore='';
+  _cpvPartite(id,soc).forEach(x=>{ const v=parseFloat(document.getElementById('cpv-a-'+x.id)?.value)||0; if(v>_cpvCapacita(x)+0.009) errore='Un importo supera il residuo della partita.'; tot+=v; });
+  tot=Math.round(tot*100)/100;
+  if(tot>g.disp+0.009) errore='Totale superiore a quanto resta da abbinare del pagamento ('+fmt(g.disp)+').';
+  document.getElementById('cpv-foot').innerHTML = `Da abbinare ${fmt(g.disp)} · assegnato <b>${fmt(tot)}</b> · resta <b>${fmt(g.disp-tot)}</b>${errore?` · <span style="color:var(--rosso)">${errore}</span>`:''}`;
+  document.getElementById('cpv-btn').disabled = !(tot>0.009) || !!errore;
+}
+function _mirrorRata(s){
+  const piano=pianiRateazione.find(p=>p.id===s.pianoId), rata=piano?.rate.find(r=>r.id===s.id); if(!rata) return;
+  rata.saldato=s.saldato; rata.saldatoSenzaPN=s.saldatoSenzaPN||0; rata.stato=s.stato;
+  if(s.dataPagamento) rata.dataPagamento=s.dataPagamento; else delete rata.dataPagamento;
+}
+function _ricalcolaStatoVoce(s, dataPag){
+  s.saldato=Math.round((s.saldato||0)*100)/100; s.saldatoSenzaPN=Math.max(0,Math.round((s.saldatoSenzaPN||0)*100)/100);
+  s.stato = s.saldato>=(s.importo-0.01)?'pagato':(s.saldato>0.009?'parziale':'aperto');
+  if(s.stato==='pagato') s.dataPagamento = dataPag||s.dataPagamento||new Date().toISOString().slice(0,10); else s.dataPagamento=null;
+  _mirrorRata(s);
+}
+async function cpvAbbina(){
+  const id=_cpv.conto, soc=document.getElementById('cpv-soc').value;
+  const g=_cpvPagamenti(id,soc).find(x=>x.reg.id===_cpv.regId); if(!g) return;
+  let n=0;
+  _cpvPartite(id,soc).forEach(x=>{
+    const v=Math.round((parseFloat(document.getElementById('cpv-a-'+x.id)?.value)||0)*100)/100; if(v<=0.009) return;
+    const daSenza=Math.min(x.saldatoSenzaPN||0, v);        // prima regolarizza il "pagato non registrato"
+    x.saldatoSenzaPN=(x.saldatoSenzaPN||0)-daSenza; x.saldato=(x.saldato||0)+(v-daSenza);
+    (x.abbinamenti=x.abbinamenti||[]).push({id:genId(), regId:g.reg.id, contoId:id, importo:v, daSenzaPN:daSenza, data:g.reg.data});
+    _ricalcolaStatoVoce(x, g.reg.data); n++;
+  });
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario(); if(document.getElementById('page-mastrini')?.classList.contains('active')) buildMastrini();
+  cpvVista(id);
+  document.getElementById('cpv-foot').innerHTML='✅ Abbinate <b>'+n+'</b> partite.';
+}
+async function cpvAnnulla(sId, aId){
+  const x=scadenzario.find(v=>v.id===sId); const a=x?.abbinamenti?.find(v=>v.id===aId); if(!a) return;
+  if(!confirm('Annullare l\'abbinamento di '+fmt(a.importo)+'? La partita torna aperta per quell\'importo.')) return;
+  x.saldato=(x.saldato||0)-(a.importo-(a.daSenzaPN||0)); x.saldatoSenzaPN=(x.saldatoSenzaPN||0)+(a.daSenzaPN||0);
+  x.abbinamenti=x.abbinamenti.filter(v=>v.id!==aId); _ricalcolaStatoVoce(x);
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario(); cpvVista(_cpv.conto);
+}
+async function cpvConteggiato(regId){
+  const r=registrazioni.find(v=>v.id===regId); if(!r) return;
+  if(!confirm('Segnare questo pagamento come già conteggiato (non verrà più proposto per l\'abbinamento)?')) return;
+  r.pagamentoConteggiato=true; if(window.salvaEAggiorna) await window.salvaEAggiorna(); cpvVista(_cpv.conto);
 }
 
 // ── NAVIGAZIONE MODULI ──
