@@ -666,7 +666,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
       <div class="page-header">
         <div class="page-title">📅 Scadenzario</div>
         <div class="page-sub">Partite aperte: fatture di vendita (clienti) e fornitori. I pagamenti non generano scadenze.</div>
-      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('scadenzario')" style="font-size:11px">🖨️ Stampa / PDF</button> <button class="btn perm-admin" onclick="ripulisciScadenzeNonValide()" style="font-size:11px" title="Rimuove dallo scadenzario le voci nate da pagamenti, incassi, IVA o soci: restano solo clienti e fornitori">🧹 Ripulisci voci non valide</button> <button class="btn btn-dark perm-admin" onclick="apriChiudiPartite()" style="font-size:11px" title="Abbina pagamenti e incassi già registrati in Prima Nota alle partite aperte">🔗 Chiudi partite</button></div>
+      <div class="no-print" style="margin-top:.5rem"><button class="btn" onclick="stampaPDF('scadenzario')" style="font-size:11px">🖨️ Stampa / PDF</button> <button class="btn perm-admin" onclick="apriPulizia()" style="font-size:11px" title="Rimuove dallo scadenzario le voci nate da pagamenti, incassi, IVA o soci: restano solo clienti e fornitori">🧹 Pulizia partite</button> <button class="btn btn-dark perm-admin" onclick="apriChiudiPartite()" style="font-size:11px" title="Abbina pagamenti e incassi già registrati in Prima Nota alle partite aperte">🔗 Chiudi partite</button></div>
       </div>
 
       <div class="crm-toggle no-print">
@@ -1513,6 +1513,106 @@ async function ripulisciScadenzeNonValide(){
   scadenzario = scadenzario.filter(x=>!ids.has(x.id));
   if(window.salvaEAggiorna) await window.salvaEAggiorna();
   buildScadenzario();
+}
+
+// ══ PULIZIA PARTITE: quadratura + voci errate/doppie ══
+let _pul = {items:[], sel:new Set()};
+function _pulPianoRisolto(p){
+  const r = String(p.regId||'');
+  if(r==='__manuale__' || r.startsWith('manuale_')) return 'manuale';
+  if(r.startsWith('apertura_')){ const id=r.slice(9); return bilancioApertura.some(b=>String(b.id)===id)?'ok':'orfano'; }
+  const reg = registrazioni.find(x=>x.id===p.regId);
+  if(!reg) return 'orfano';
+  return reg.righe.some(g=>g.contoId===p.contoId)?'ok':'incoerente';
+}
+function _pulPianoEliminabile(p){
+  if((p.rate||[]).some(r=>(r.saldato&&r.saldato!==0&&r.saldato!==false)||r.saldatoSenzaPN)) return false;
+  return !scadenzario.some(x=>x.pianoId===p.id && ((x.saldato||0)>0 || (x.saldatoSenzaPN||0)>0 || (x.abbinamenti||[]).length));
+}
+function _pulTrova(){
+  const items=[]; const dup=new Set();
+  const totPiano = p=>(p.rate||[]).reduce((s,r)=>s+(parseFloat(r.importo)||0),0);
+  const pagato = p=>(p.rate||[]).reduce((s,r)=>s+(r.saldato===true?(parseFloat(r.importo)||0):(parseFloat(r.saldato)||0)),0);
+  // duplicati: stesso soc+conto+calendario, oppure stesso soc+conto+regId (non manuale)
+  const gruppi={};
+  pianiRateazione.forEach(p=>{
+    const sig = p.soc+'|'+p.contoId+'|'+(p.rate||[]).map(r=>r.scadenza+':'+(+r.importo).toFixed(2)).join(',');
+    (gruppi['S'+sig]=gruppi['S'+sig]||[]).push(p);
+    if(_pulPianoRisolto(p)!=='manuale') (gruppi['R'+p.soc+'|'+p.contoId+'|'+p.regId]=gruppi['R'+p.soc+'|'+p.contoId+'|'+p.regId]||[]).push(p);
+  });
+  Object.values(gruppi).forEach(g=>{
+    if(g.length<2) return;
+    const ord=[...g].sort((a,b)=>pagato(b)-pagato(a));
+    ord.slice(1).forEach(p=>dup.add(p.id));
+  });
+  pianiRateazione.forEach(p=>{
+    const st=_pulPianoRisolto(p), el=_pulPianoEliminabile(p), isDup=dup.has(p.id);
+    let motivo=null, pre=false;
+    if(st==='orfano'){ motivo='Piano senza registrazione collegata (la registrazione/apertura non esiste più)'; pre=true; }
+    else if(isDup){ motivo='Piano doppio: stesso conto e stesse rate di un altro piano (si tiene quello con più pagato)'; pre=true; }
+    else if(st==='incoerente'){ motivo='La registrazione collegata non ha nessuna riga su questo conto'; }
+    else if(st==='manuale'){ motivo='Piano manuale: non ha una registrazione dietro, verificare se corrisponde al saldo contabile'; }
+    if(!motivo) return;
+    items.push({k:'P:'+p.id, tipo:'piano', id:p.id, soc:p.soc, conto:p.contoId, desc:(p.desc||'')+' · '+(p.rate||[]).length+' rate', importo:totPiano(p), pagato:pagato(p), motivo, el, pre:pre&&el});
+  });
+  // voci sciolte
+  const nv=new Set(_scadenzeNonValide().map(x=>x.id));
+  const visti={};
+  scadenzario.filter(x=>!x.pianoId).forEach(x=>{
+    let motivo=null;
+    if(nv.has(x.id)) motivo='Voce non valida (pagamento/IVA/soci o senza riga di apertura)';
+    else {
+      const key=[x.soc,x.contoId,x.regId,x.scadenza,(+x.importo||0).toFixed(2)].join('|');
+      if(visti[key]) motivo='Voce sciolta doppia (stessa registrazione, scadenza e importo)'; else visti[key]=1;
+    }
+    if(!motivo) return;
+    const el=!((x.saldato||0)>0||(x.saldatoSenzaPN||0)>0||(x.abbinamenti||[]).length);
+    items.push({k:'S:'+x.id, tipo:'voce', id:x.id, soc:x.soc, conto:x.contoId, desc:(x.controparte||'')+' · scad. '+fmtData(x.scadenza), importo:x.importo||0, pagato:x.saldato||0, motivo, el, pre:el});
+  });
+  return items;
+}
+function _pulQuadratura(){
+  const out=[]; const chiavi=new Set();
+  scadenzario.forEach(x=>chiavi.add(x.soc+'|'+x.contoId));
+  bilancioApertura.forEach(b=>{ if(isContoPartita(b.contoId)) chiavi.add(b.soc+'|'+b.contoId); });
+  chiavi.forEach(k=>{
+    const [soc,contoId]=k.split('|');
+    if(!isContoPartita(contoId)) return;
+    const contab=calcolaSaldoConto(contoId,soc);
+    if(!contab && !scadenzario.some(x=>x.soc===soc&&x.contoId===contoId)) return;
+    const res=scadenzario.filter(x=>x.soc===soc&&x.contoId===contoId).reduce((s,x)=>s+Math.max(0,(x.importo||0)-(x.saldato||0)),0);
+    const diff=Math.round((res-contab)*100)/100;
+    if(Math.abs(diff)>=0.01) out.push({soc,contoId,contab,res,diff});
+  });
+  return out.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+}
+function apriPulizia(){ _pul={items:_pulTrova(),sel:new Set()}; _pul.items.forEach(i=>{ if(i.pre) _pul.sel.add(i.k); }); pulRender(); apriModal('modal-pulizia'); }
+function pulRender(){
+  const q=_pulQuadratura(), it=_pul.items;
+  let h='<div style="font-weight:700;margin:.2rem 0">1) Quadratura: saldo contabile vs scadenzario</div>';
+  if(!q.length) h+='<div style="color:var(--green,#1A5C38);font-size:12px">✓ Tutti i conti di clienti/fornitori quadrano con lo scadenzario.</div>';
+  else h+='<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="background:var(--bg3);font-size:10px;text-transform:uppercase"><th align="left" style="padding:4px">Società</th><th align="left">Conto</th><th align="right">Saldo contabile</th><th align="right">Scadenzario aperto</th><th align="right">Differenza</th><th align="left" style="padding-left:.6rem">Lettura</th></tr>'
+    +q.map(r=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px">'+r.soc+'</td><td>'+getNomeContoById(r.contoId)+'</td><td align="right">'+fmt(r.contab)+'</td><td align="right">'+fmt(r.res)+'</td><td align="right" style="font-weight:700;color:#A93226">'+fmt(r.diff)+'</td><td style="padding-left:.6rem;color:var(--text2)">'+(r.diff>0?'scadenze in eccesso (piani/voci orfane o pagamenti non abbinati)':'saldo non pianificato in scadenzario')+'</td></tr>').join('')+'</table>';
+  h+='<div style="font-weight:700;margin:.9rem 0 .2rem">2) Voci errate o doppie ('+it.length+')</div>';
+  if(!it.length) h+='<div style="font-size:12px;color:var(--text2)">Nessuna voce da segnalare.</div>';
+  else h+='<div style="font-size:11px;color:var(--text2);margin-bottom:.3rem">Preselezionate solo le voci sicuramente errate. I piani manuali o incoerenti NON sono preselezionati: li decidi tu. Le voci con importi già pagati/abbinati non sono eliminabili da qui.</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="background:var(--bg3);font-size:10px;text-transform:uppercase"><th></th><th align="left">Soc.</th><th align="left">Conto</th><th align="left">Voce</th><th align="right">Importo</th><th align="right">Pagato</th><th align="left" style="padding-left:.6rem">Motivo</th></tr>'
+    +it.map((i,n)=>'<tr style="border-bottom:1px solid var(--border);vertical-align:top"><td style="padding:4px"><input type="checkbox" '+(i.el?'':'disabled ')+(_pul.sel.has(i.k)?'checked ':'')+'onchange="pulTog('+n+',this.checked)"></td><td>'+(i.soc||'')+'</td><td>'+getNomeContoById(i.conto)+'</td><td>'+i.desc+'</td><td align="right">'+fmt(i.importo)+'</td><td align="right">'+fmt(i.pagato)+'</td><td style="padding-left:.6rem;color:'+(i.el?'var(--text2)':'#A93226')+'">'+i.motivo+(i.el?'':' — <b>non eliminabile: ha pagamenti</b>')+'</td></tr>').join('')+'</table>';
+  document.getElementById('pul-body').innerHTML=h;
+  document.getElementById('pul-btn').disabled=_pul.sel.size===0;
+  document.getElementById('pul-btn').textContent='Elimina selezionate ('+_pul.sel.size+')';
+}
+function pulTog(n,on){ const k=_pul.items[n].k; on?_pul.sel.add(k):_pul.sel.delete(k); pulRender(); }
+async function pulElimina(){
+  const L=_pul.items.filter(i=>_pul.sel.has(i.k)&&i.el);
+  if(!L.length) return;
+  if(!confirm('Eliminare '+L.length+' voci per '+fmt(L.reduce((s,i)=>s+i.importo,0))+'?\n\n'+L.slice(0,10).map(i=>'• '+i.soc+' · '+getNomeContoById(i.conto)+' · '+i.desc+' · '+fmt(i.importo)).join('\n')+(L.length>10?'\n… e altre '+(L.length-10):'')+'\n\nLa Prima Nota NON viene toccata.')) return;
+  const piani=new Set(L.filter(i=>i.tipo==='piano').map(i=>i.id)), voci=new Set(L.filter(i=>i.tipo==='voce').map(i=>i.id));
+  pianiRateazione = pianiRateazione.filter(p=>!piani.has(p.id));
+  scadenzario = scadenzario.filter(x=>!voci.has(x.id) && !(x.pianoId && piani.has(x.pianoId)));
+  if(window.salvaEAggiorna) await window.salvaEAggiorna();
+  buildScadenzario(); try{ buildMastrini(); }catch(e){}
+  apriPulizia();
 }
 
 function renderPrimaNota(){
@@ -3871,6 +3971,17 @@ async function cambiaRuoloUtente(uid,ruolo){
 </div>
 
 <!-- MODAL UPLOAD FATTURA PASSIVA -->
+<div class="modal-overlay" id="modal-pulizia" onclick="if(event.target===this)chiudiModal('modal-pulizia')">
+  <div class="modal" style="width:1100px;max-width:97vw">
+    <div class="modal-title">🧹 Pulizia partite — voci errate o doppie</div>
+    <div id="pul-body" style="max-height:62vh;overflow:auto"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="chiudiModal('modal-pulizia')">Chiudi</button>
+      <button class="btn btn-dark" id="pul-btn" onclick="pulElimina()" disabled>Elimina selezionate</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-chiudi-partite" onclick="if(event.target===this)chiudiModal('modal-chiudi-partite')">
   <div class="modal" style="width:1100px;max-width:97vw">
     <div class="modal-title">🔗 Chiudi partite — abbina pagamenti e incassi alle partite aperte</div>
