@@ -853,6 +853,7 @@ body.role-editor .perm-admin, body.role-visitor .perm-admin{display:none!importa
 <div class="modal-overlay" id="modal-primanota" onclick="if(event.target===this)chiudiModal('modal-primanota')">
   <div class="modal" style="width:900px">
     <div class="modal-title">📒 Nuova Registrazione</div>
+    <div id="pn-dup-banner" style="display:none;background:#FFF4E5;border:1px solid #F5C27A;color:#7a4a00;border-radius:8px;padding:7px 10px;font-size:12px;margin-bottom:.7rem"></div>
     <div class="two-col">
       <div class="form-row">
         <label class="form-label">Data</label>
@@ -1320,8 +1321,25 @@ function apriModalPrimaNotaDaMastrini(){
   if(filtSoc) document.getElementById('pn-soc').value = filtSoc; // comodo: riprende la società che stavi già guardando
 }
 
+// Duplica una registrazione: apre il modal con una COPIA da modificare. Non esiste nulla finché non premi Salva.
+function duplicaRegistrazione(id){
+  const src = registrazioni.find(r=>r.id===id);
+  if(!src){ alert('Registrazione non trovata.'); return; }
+  openModalPrimaNota(id);          // precompila tutti i campi dall'originale
+  _editRegId = null;               // da qui in poi è una NUOVA registrazione (nuovo id al salvataggio)
+  document.getElementById('pn-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pn-rif').value = '';           // il riferimento (n° fattura/documento) non va ereditato
+  document.getElementById('pn-scadenza').value = '';      // le scadenze vecchie non hanno senso sulla copia
+  _pdRighe.forEach(r=>{ delete r.scadenza; });
+  renderPDRighe();
+  const bn = document.getElementById('pn-dup-banner');
+  bn.innerHTML = '📋 <b>Copia di:</b> '+fmtData(src.data)+' · '+(src.desc||'')+'. Modifica quello che serve e premi Salva: la registrazione originale resta com\'è. Data impostata a oggi; riferimento e scadenze azzerati, da reinserire se servono.';
+  bn.style.display = 'block';
+}
+
 function openModalPrimaNota(id){
   _editRegId = id || null;
+  const _bn=document.getElementById('pn-dup-banner'); if(_bn) _bn.style.display='none';
   // Una registrazione aperta da qui NON è il saldo di una rata: azzera il riferimento rimasto
   // da un precedente "Salda" annullato, altrimenti la rata vecchia verrebbe segnata come pagata
   const _mpn = document.getElementById('modal-primanota');
@@ -1670,7 +1688,8 @@ function renderPrimaNota(){
       <td class="avere-cell">${fmt(totAvere)}</td>
       <td style="font-size:10px;color:var(--text2)">${reg.rif||'—'}</td>
       <td style="white-space:nowrap">
-        <button class="btn" style="font-size:10px;padding:2px 8px;margin-right:3px" onclick="openModalPrimaNota('${reg.id}')">✏</button>
+        <button class="btn" style="font-size:10px;padding:2px 8px;margin-right:3px" onclick="openModalPrimaNota('${reg.id}')" title="Modifica">✏</button>
+        <button class="btn" style="font-size:10px;padding:2px 8px;margin-right:3px" onclick="duplicaRegistrazione('${reg.id}')" title="Duplica: crea una copia da modificare">⎘</button>
         <button class="btn-del" onclick="delRegistrazione('${reg.id}')">✕</button>
       </td>
     </tr>`;
@@ -1939,7 +1958,7 @@ function buildMastrini(){
           <div class="mastrino-td" style="text-align:right;color:var(--dare)">${m.dare?fmt(m.dare):'—'}</div>
           <div class="mastrino-td" style="text-align:right;color:var(--avere)">${m.avere?fmt(m.avere):'—'}</div>
           <div class="mastrino-td ${spClass}">${fmt(Math.abs(saldoProg))} ${spLabel}</div>
-          <div class="mastrino-td" style="white-space:nowrap">${rateBtn}${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="openModalPrimaNota('${m.regId}')">✏</button><button class="btn-del" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="delRegistrazione('${m.regId}')">🗑</button>`:''}</div>`;
+          <div class="mastrino-td" style="white-space:nowrap">${rateBtn}${m.tipo==='mov'?`<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="openModalPrimaNota('${m.regId}')" title="Modifica">✏</button><button class="btn" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="duplicaRegistrazione('${m.regId}')" title="Duplica: crea una copia da modificare">⎘</button><button class="btn-del" style="font-size:9px;padding:1px 6px;margin-left:3px" onclick="delRegistrazione('${m.regId}')">🗑</button>`:''}</div>`;
         }).join('')}
         <div class="mastrino-td" style="font-weight:700;background:var(--bg3)">TOTALE</div>
         <div class="mastrino-td" style="background:var(--bg3)"></div>
